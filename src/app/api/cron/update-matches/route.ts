@@ -7,10 +7,10 @@ const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function GET(request: Request) {
     // 1. Security Check
+    // 1. Security Check
     const authHeader = request.headers.get("authorization");
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        // Allow localhost for testing without secret if needed, or strict check
-        // return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     try {
@@ -88,7 +88,13 @@ export async function GET(request: Request) {
         });
 
         if (!response.ok) {
-            throw new Error(`External API Error: ${response.statusText}`);
+            console.error(`External API Request Failed: ${response.status} ${response.statusText}`);
+            // Return 200 to keep cron execution passing, but log the error
+            return NextResponse.json({
+                success: false,
+                error: `External API Error: ${response.status}`,
+                details: await response.text()
+            }, { status: 200 });
         }
 
         const data = await response.json();
@@ -159,6 +165,7 @@ export async function GET(request: Request) {
 
     } catch (error: any) {
         console.error("Cron Error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        // CRITICAL: Return 200 to prevent cron-service from disabling the job on transient errors
+        return NextResponse.json({ success: false, error: error.message }, { status: 200 });
     }
 }
