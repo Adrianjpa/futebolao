@@ -88,7 +88,7 @@ export default function DashboardLayout({
         `}>
                     <div className="h-16 flex items-center px-6 border-b border-white/10 shrink-0">
                         <Trophy className="h-6 w-6 text-primary mr-2" />
-                        <span className="font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">FutBolão Pro</span>
+                        <span className="font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">Futboleiros</span>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4 space-y-2">

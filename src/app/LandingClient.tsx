@@ -136,7 +136,7 @@ export default function LandingClient() {
               <Trophy className="h-8 w-8 text-primary-foreground" />
             </div>
           </div>
-          <CardTitle className="text-3xl font-bold tracking-tight">FutBolão Pro</CardTitle>
+          <CardTitle className="text-3xl font-bold tracking-tight">Futboleiros</CardTitle>
           <CardDescription className="text-base">
             O sistema de bolão oficial da galera
           </CardDescription>
@@ -278,7 +278,7 @@ export default function LandingClient() {
           </Tabs>
         </CardContent>
         <CardFooter className="flex justify-center text-xs text-muted-foreground pb-6">
-          © 2024 FutBolão Pro
+          © 2024 Futboleiros
         </CardFooter>
       </Card>
     </div>

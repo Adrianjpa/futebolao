@@ -111,7 +111,7 @@ export default function RegisterPage() {
                 </div>
                 <CardTitle className="text-2xl font-bold">Crie sua conta</CardTitle>
                 <CardDescription>
-                    Junte-se ao FutBolão Pro e comece a palpitar
+                    Junte-se ao Futboleiros e comece a palpitar
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

@@ -2,8 +2,8 @@ import { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
     return {
-        name: 'Futbolão Pro',
-        short_name: 'Futbolão',
+        name: 'Futboleiros',
+        short_name: 'Futboleiros',
         description: 'Acompanhe jogos, dê palpites e participe de ligas.',
         start_url: '/',
         display: 'standalone',
