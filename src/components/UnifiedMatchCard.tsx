@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { format, isToday, differenceInMinutes, differenceInHours } from "date-fns";
+import { format, isToday, isTomorrow, differenceInMinutes, differenceInHours } from "date-fns";
 import { Calendar, ChevronDown, ChevronUp, CheckCircle2, Edit, Loader2, Trophy } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -337,7 +337,7 @@ export function UnifiedMatchCard({
                     {(!isLive || isFinished) && (
                         <div className="mt-2 text-xs text-muted-foreground font-medium flex items-center gap-1 bg-background/50 px-2 py-0.5 rounded-full border border-transparent hover:border-border transition-colors">
                             <Calendar className="h-3 w-3" />
-                            {isToday(matchDate) ? "Hoje" : format(matchDate, "dd/MM")}
+                            {isToday(matchDate) ? "Hoje" : isTomorrow(matchDate) ? "Amanhã" : format(matchDate, "dd/MM")}
                             <span className="mx-0.5">•</span>
                             {format(matchDate, "HH:mm")}
                         </div>
