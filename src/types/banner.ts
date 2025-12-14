@@ -3,6 +3,7 @@ export interface BannerConfig {
     championshipLogoUrl?: string; // URL for the championship logo (e.g. World Cup logo)
     backgroundUrl?: string; // Custom background image
     displayMode: 'photo_and_names' | 'names_only';
+    layoutStyle?: 'modern' | 'classic'; // [NEW] Style variant
     titleColor: string; // Hex color for "GANHADORES"
     subtitleColor: string; // Hex color for subtitles
     namesColor: string; // Hex color for user names
@@ -34,4 +35,5 @@ export interface ChampionshipBannerData {
     championPredictionSettings: ChampionPredictionSettings;
     finalRanking?: FinalRanking;
     manualWinners?: BannerWinner[]; // [NEW] Manual override list
+    teamMode?: 'clubes' | 'selecoes' | 'mista'; // [NEW] Team mode for banner text
 }

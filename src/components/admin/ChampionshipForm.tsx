@@ -1,8 +1,26 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Check, ChevronsUpDown, X } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { getDocs, query, collection, where, limit } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import * as z from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { format } from "date-fns";
+import { Calendar as CalendarIcon, Save, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChampionBanner } from "@/components/banner/ChampionBanner";
+import { BannerConfig, BannerWinner } from "@/types/banner";
 
 const formSchema = z.object({
     name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
@@ -26,6 +44,7 @@ const formSchema = z.object({
         subtitleColor: z.string().default("#FBBF24"),
         namesColor: z.string().default("#FFFFFF"),
         displayMode: z.enum(["photo_and_names", "names_only"]).default("photo_and_names"),
+        layoutStyle: z.enum(["modern", "classic"]).default("modern"),
     }).optional(),
     manualWinners: z.array(z.object({
         userId: z.string(),
@@ -61,13 +80,19 @@ function UserSearch({ onSelect }: { onSelect: (user: any) => void }) {
 
         setLoading(true);
         try {
-            // Simple search by nickname (can be improved with specialized search index)
-            // Note: Firestore doesn't support partial text search natively well.
-            // We'll search by exact match or startAt for nickname.
-            // For now, let's fetch ALL users (not recommended for large apps) or 
-            // relying on client-side filtering if user count is low.
-            // BETTER APPROACH: Search by email or exact nickname match for admin tools.
-            const q = query(collection(db, "users"), where("nickname", ">=", term), where("nickname", "<=", term + '\uf8ff'), limit(5));
+            // Improved Search: Search by simple startAt on displayName (since nickname might be missing)
+            // Note: In production, consider Algolia or a specialized search collection.
+            const usersRef = collection(db, "users");
+            // Create two queries to try finding by nickname OR displayName (workaround for no OR in client SDK easily combined)
+            // For this admin tool, searching by displayName is safer.
+
+            const q = query(
+                usersRef,
+                where("displayName", ">=", term),
+                where("displayName", "<=", term + '\uf8ff'),
+                limit(10)
+            );
+
             const snap = await getDocs(q);
             setFoundUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         } catch (e) {
@@ -144,21 +169,48 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
     });
 
     // Helper to add manual winner
-    const addManualWinner = (user: any, position: 'champion' | 'gold_winner') => {
+    const addManualWinner = (user: any, position: 'champion' | 'gold_winner' | 'silver_winner' | 'bronze_winner') => {
         const current = form.getValues("manualWinners") || [];
-        // Remove existing for this position
-        const filtered = current.filter(w => w.position !== position);
-        form.setValue("manualWinners", [...filtered, {
-            userId: user.id,
+        // Prevent duplicates
+        if (current.some(w => w.userId === user.id && w.position === position)) return;
+
+        const newWinner = {
+            userId: user.id || user.uid,
             displayName: user.nickname || user.nome,
-            photoUrl: user.fotoPerfil || user.photoURL,
-            position: position
-        }]);
+            photoUrl: user.photoUrl || user.customPhotoUrl || "",
+            position
+        };
+        form.setValue("manualWinners", [...current, newWinner]);
     };
 
-    const removeManualWinner = (position: string) => {
+    const removeManualWinner = (userId: string, position: string) => {
         const current = form.getValues("manualWinners") || [];
-        form.setValue("manualWinners", current.filter(w => w.position !== position));
+        form.setValue("manualWinners", current.filter(w => !(w.userId === userId && w.position === position)));
+    };
+
+    const manualWinners = form.watch("manualWinners") || [];
+    const bannerLayout = form.watch("bannerConfig.layoutStyle");
+
+    // Check for ties to enforce classic layout
+    const championsCount = manualWinners.filter(w => w.position === 'champion').length;
+    const goldCount = manualWinners.filter(w => w.position === 'gold_winner').length;
+    const hasTies = championsCount > 1 || goldCount > 1;
+
+    useEffect(() => {
+        if (hasTies && bannerLayout !== 'classic') {
+            form.setValue("bannerConfig.layoutStyle", "classic");
+        }
+    }, [hasTies, bannerLayout, form]);
+
+
+    const getPositionLabel = (position: string) => {
+        switch (position) {
+            case 'champion': return 'Campeão';
+            case 'gold_winner': return 'Vencedor Ouro';
+            case 'silver_winner': return 'Vencedor Prata';
+            case 'bronze_winner': return 'Vencedor Bronze';
+            default: return position;
+        }
     };
 
     return (
@@ -421,8 +473,60 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
                             </div>
 
                             {form.watch("bannerEnabled") && (
-                                <>
+                                <div className="space-y-6 animate-in slide-in-from-top-2 duration-300">
+                                    <div className="rounded-xl overflow-hidden border-2 border-dashed border-slate-300 bg-slate-100 p-4 flex justify-center items-center">
+                                        <div className="w-full max-w-[500px] shadow-2xl skew-x-1 hover:skew-x-0 transition-transform duration-500">
+                                            <ChampionBanner
+                                                championshipName={form.watch("name") || "Nome do Campeonato"}
+                                                config={form.watch("bannerConfig") as BannerConfig}
+                                                winners={form.watch("manualWinners") as BannerWinner[] || []}
+                                                teamMode={form.watch("teamMode") || "clubes"}
+                                            />
+                                        </div>
+                                    </div>
+                                    <p className="text-center text-xs text-muted-foreground">Pré-visualização em tempo real</p>
+
                                     <div className="grid grid-cols-2 gap-4 border-t pt-4">
+                                        <div className="grid gap-2">
+                                            <Label>Estilo do Banner</Label>
+                                            <Select
+                                                onValueChange={(val) => form.setValue("bannerConfig.layoutStyle", val as "modern" | "classic")}
+                                                value={hasTies ? "classic" : (form.watch("bannerConfig.layoutStyle") || "modern")}
+                                                disabled={hasTies}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Selecione..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="modern">Moderno (Cards)</SelectItem>
+                                                    <SelectItem value="classic">Clássico (Texto/Lista)</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            {hasTies && (
+                                                <p className="text-[10px] text-amber-600 font-medium mt-1">
+                                                    Forçado para Clássico (Múltiplos Vencedores)
+                                                </p>
+                                            )}
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label>Modo de Exibição</Label>
+                                            <Select
+                                                onValueChange={(val) => form.setValue("bannerConfig.displayMode", val as "photo_and_names" | "names_only")}
+                                                defaultValue={form.watch("bannerConfig.displayMode")}
+                                                disabled={form.watch("bannerConfig.layoutStyle") === "modern"}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="photo_and_names">Foto + Nome</SelectItem>
+                                                    <SelectItem value="names_only">Apenas Nomes</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            {form.watch("bannerConfig.layoutStyle") === "modern" && (
+                                                <p className="text-[10px] text-muted-foreground mt-1">Fixo em Foto + Nome</p>
+                                            )}
+                                        </div>
                                         <div className="grid gap-2">
                                             <Label>Cor do Título (Ex: #FFFFFF)</Label>
                                             <Input {...form.register("bannerConfig.titleColor")} placeholder="#FFFFFF" />
@@ -456,66 +560,70 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
 
                                         {/* General Champion Selector */}
                                         <div className="grid gap-2 p-4 bg-slate-50 border rounded-lg">
-                                            <div className="flex justify-between items-center">
-                                                <Label className="text-base font-bold text-yellow-600">🏆 Campeão Geral</Label>
-                                                {form.watch("manualWinners")?.find(w => w.position === 'champion') && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => removeManualWinner('champion')}
-                                                        className="text-red-500 h-6"
-                                                    >
-                                                        Remover
-                                                    </Button>
-                                                )}
+                                            <Label className="text-base font-bold text-yellow-600">🏆 Campeão Geral</Label>
+
+                                            {/* List of current champions */}
+                                            <div className="space-y-2">
+                                                {form.watch("manualWinners")?.filter(w => w.position === 'champion').map((winner) => (
+                                                    <div key={winner.userId} className="flex items-center justify-between gap-3 bg-white p-2 rounded border">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="h-8 w-8 bg-slate-200 rounded-full overflow-hidden">
+                                                                {winner.photoUrl && <img src={winner.photoUrl} className="h-full w-full object-cover" />}
+                                                            </div>
+                                                            <span className="font-medium">{winner.displayName}</span>
+                                                        </div>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            type="button"
+                                                            onClick={() => removeManualWinner(winner.userId, 'champion')}
+                                                            className="text-red-500 h-8 w-8 p-0"
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                ))}
                                             </div>
 
-                                            {form.watch("manualWinners")?.find(w => w.position === 'champion') ? (
-                                                <div className="flex items-center gap-3 bg-white p-2 rounded border">
-                                                    <div className="h-8 w-8 bg-slate-200 rounded-full overflow-hidden">
-                                                        {form.watch("manualWinners")?.find(w => w.position === 'champion')?.photoUrl && (
-                                                            <img src={form.watch("manualWinners")?.find(w => w.position === 'champion')?.photoUrl} className="h-full w-full object-cover" />
-                                                        )}
-                                                    </div>
-                                                    <span className="font-medium">{form.watch("manualWinners")?.find(w => w.position === 'champion')?.displayName}</span>
-                                                </div>
-                                            ) : (
+                                            <div className="mt-2">
                                                 <UserSearch onSelect={(u) => addManualWinner(u, 'champion')} />
-                                            )}
+                                            </div>
                                         </div>
 
                                         {/* Gold Winner Selector */}
                                         <div className="grid gap-2 p-4 bg-slate-50 border rounded-lg">
-                                            <div className="flex justify-between items-center">
-                                                <Label className="text-base font-bold text-amber-600">🌟 Palpiteiro de Ouro</Label>
-                                                {form.watch("manualWinners")?.find(w => w.position === 'gold_winner') && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => removeManualWinner('gold_winner')}
-                                                        className="text-red-500 h-6"
-                                                    >
-                                                        Remover
-                                                    </Button>
-                                                )}
+                                            <Label className="text-base font-bold text-amber-600">🌟 Palpiteiro de Ouro</Label>
+
+                                            {/* List of current gold winners */}
+                                            <div className="space-y-2">
+                                                {form.watch("manualWinners")?.filter(w => w.position === 'gold_winner').map((winner) => (
+                                                    <div key={winner.userId} className="flex items-center justify-between gap-3 bg-white p-2 rounded border">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="h-8 w-8 bg-slate-200 rounded-full overflow-hidden">
+                                                                {winner.photoUrl && <img src={winner.photoUrl} className="h-full w-full object-cover" />}
+                                                            </div>
+                                                            <span className="font-medium">{winner.displayName}</span>
+                                                        </div>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            type="button"
+                                                            onClick={() => removeManualWinner(winner.userId, 'gold_winner')}
+                                                            className="text-red-500 h-8 w-8 p-0"
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                ))}
                                             </div>
 
-                                            {form.watch("manualWinners")?.find(w => w.position === 'gold_winner') ? (
-                                                <div className="flex items-center gap-3 bg-white p-2 rounded border">
-                                                    <div className="h-8 w-8 bg-slate-200 rounded-full overflow-hidden">
-                                                        {form.watch("manualWinners")?.find(w => w.position === 'gold_winner')?.photoUrl && (
-                                                            <img src={form.watch("manualWinners")?.find(w => w.position === 'gold_winner')?.photoUrl} className="h-full w-full object-cover" />
-                                                        )}
-                                                    </div>
-                                                    <span className="font-medium">{form.watch("manualWinners")?.find(w => w.position === 'gold_winner')?.displayName}</span>
-                                                </div>
-                                            ) : (
+                                            <div className="mt-2">
                                                 <UserSearch onSelect={(u) => addManualWinner(u, 'gold_winner')} />
-                                            )}
+                                            </div>
                                         </div>
 
                                     </div>
-                                </>
+                                </div>
                             )}
                         </CardContent>
                     </Card>
