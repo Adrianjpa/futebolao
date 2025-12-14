@@ -36,7 +36,7 @@ export function Countdown({ targetDate, onZero }: CountdownProps) {
         return () => clearInterval(timer);
     }, [targetDate, onZero]);
 
-    if (timeLeft <= 0) return <span className="text-red-600 font-bold">00:00:00</span>;
+    if (timeLeft <= 0) return <span className="text-muted-foreground font-bold text-[10px] animate-pulse">AGUARDANDO...</span>;
 
     const hours = Math.floor(timeLeft / 3600);
     const minutes = Math.floor((timeLeft % 3600) / 60);
