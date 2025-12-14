@@ -131,12 +131,16 @@ export default function LandingClient() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/20 p-4">
       <Card className="w-full max-w-md border-primary/20 shadow-2xl shadow-primary/10">
         <CardHeader className="text-center pb-2">
-          <div className="flex justify-center mb-4">
-            <div className="bg-primary p-3 rounded-xl shadow-lg shadow-primary/20">
-              <Trophy className="h-8 w-8 text-primary-foreground" />
+          <div className="flex justify-center mb-6">
+            {/* Light Mode Logo */}
+            <div className="dark:hidden h-16 w-auto">
+              <img src="/images/logo-full-light.png" alt="Futboleiros" className="h-full w-auto object-contain" />
+            </div>
+            {/* Dark Mode Logo */}
+            <div className="hidden dark:block h-16 w-auto">
+              <img src="/images/logo-full-dark.png" alt="Futboleiros" className="h-full w-auto object-contain" />
             </div>
           </div>
-          <CardTitle className="text-3xl font-bold tracking-tight">Futboleiros</CardTitle>
           <CardDescription className="text-base">
             O sistema de bolão oficial da galera
           </CardDescription>

@@ -87,8 +87,14 @@ export default function DashboardLayout({
           md:relative md:translate-x-0 shadow-2xl flex flex-col h-full
         `}>
                     <div className="h-16 flex items-center px-6 border-b border-white/10 shrink-0">
-                        <Trophy className="h-6 w-6 text-primary mr-2" />
-                        <span className="font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">Futboleiros</span>
+                        {/* Light Mode Logo */}
+                        <div className="dark:hidden h-10 w-auto">
+                            <img src="/images/logo-full-light.png" alt="Futboleiros" className="h-full w-auto object-contain" />
+                        </div>
+                        {/* Dark Mode Logo */}
+                        <div className="hidden dark:block h-10 w-auto">
+                            <img src="/images/logo-full-dark.png" alt="Futboleiros" className="h-full w-auto object-contain" />
+                        </div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4 space-y-2">
