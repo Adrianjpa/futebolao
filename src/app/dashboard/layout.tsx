@@ -88,11 +88,11 @@ export default function DashboardLayout({
         `}>
                     <div className="h-16 flex items-center px-6 border-b border-white/10 shrink-0">
                         {/* Light Mode Logo */}
-                        <div className="dark:hidden h-10 w-auto">
+                        <div className="dark:hidden h-14 w-auto">
                             <img src="/images/logo-full-light.png" alt="Futboleiros" className="h-full w-auto object-contain" />
                         </div>
                         {/* Dark Mode Logo */}
-                        <div className="hidden dark:block h-10 w-auto">
+                        <div className="hidden dark:block h-14 w-auto">
                             <img src="/images/logo-full-dark.png" alt="Futboleiros" className="h-full w-auto object-contain" />
                         </div>
                     </div>
