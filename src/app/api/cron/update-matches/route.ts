@@ -108,13 +108,23 @@ export async function GET(request: Request) {
         const batch = adminDb.batch();
 
         for (const localMatch of localMatches) {
+            // 0. Manual Override Check
+            if (localMatch.isManual === true) {
+                console.log(`Skipping match ${localMatch.id} (Manual Override users)`);
+                continue;
+            }
+
             const apiMatch = apiMatchesMap.get(localMatch.apiId) as any;
 
             if (apiMatch) {
                 // Map Status
                 let newStatus = 'scheduled';
-                if (apiMatch.status === 'IN_PLAY' || apiMatch.status === 'PAUSED') newStatus = 'live';
-                if (apiMatch.status === 'FINISHED') newStatus = 'finished';
+                const rawStatus = apiMatch.status; // Capture raw API status
+
+                if (rawStatus === 'IN_PLAY' || rawStatus === 'PAUSED') newStatus = 'live';
+                if (rawStatus === 'FINISHED' || rawStatus === 'AWARDED') newStatus = 'finished';
+                // POSTPONED, SUSPENDED, CANCELLED stay as 'scheduled' (so they show in list) 
+                // but we will use 'apiStatus' to show the badge.
 
                 const apiHomeScore = apiMatch.score.fullTime.home ?? 0;
                 const apiAwayScore = apiMatch.score.fullTime.away ?? 0;
@@ -129,6 +139,7 @@ export async function GET(request: Request) {
                 if (localMatch.homeScore !== apiHomeScore ||
                     localMatch.awayScore !== apiAwayScore ||
                     localMatch.status !== newStatus ||
+                    localMatch.apiStatus !== rawStatus || // Check for status change
                     isDateChanged) {
 
                     const matchRef = matchesRef.doc(localMatch.id);
@@ -136,6 +147,7 @@ export async function GET(request: Request) {
                         homeScore: apiHomeScore,
                         awayScore: apiAwayScore,
                         status: newStatus,
+                        apiStatus: rawStatus, // Save the raw status
                         lastUpdated: Timestamp.now()
                     };
 

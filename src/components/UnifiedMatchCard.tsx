@@ -28,6 +28,9 @@ interface Match {
     championshipName?: string;
     championshipType?: string;
     apiId?: string;
+    apiStatus?: string; // New field for raw status
+    isManual?: boolean; // New field for manual override
+    betsOpen?: boolean; // New field for betting override
 }
 
 interface UnifiedMatchCardProps {
@@ -62,10 +65,19 @@ export function UnifiedMatchCard({
     const isFinished = finished ?? (match.status === 'finished' || match.status === 'FINISHED');
 
     // Urgency & Locking
+    // Urgency & Locking
     const isUrgent = !isAdmin && hoursDiff < 2 && hoursDiff >= 0 && !isFinished && !isLive;
-    const isLocked = now >= matchDate || isLive || isFinished;
-    const canEdit = isAdmin && (isLive || isFinished) && match.championshipType !== 'AUTO';
-    const canFinish = isAdmin && isLive;
+
+    // NEW: Locking Logic with Override
+    // Default Lock: Time passed OR Game Live/Finished
+    const defaultLocked = now >= matchDate || isLive || isFinished;
+    // Final Lock: Default Lock UNLESS Admin manually opened bets
+    const isLocked = defaultLocked && !match.betsOpen;
+
+    const canEdit = isAdmin && (isLive || isFinished || match.isManual) && match.championshipType !== 'AUTO'; // Allow edit if Manual
+    const canFinish = isAdmin && (isLive || match.isManual);
+
+
 
     // States
     const [isEditing, setIsEditing] = useState(false);
@@ -145,16 +157,27 @@ export function UnifiedMatchCard({
         setExpanded(!expanded);
     };
 
+    // Unified Status Badge Component
     const StatusBadge = () => {
+        // 1. Check for specific API statuses first (Postponed, etc)
+        const rawStatus = match.apiStatus || match.status;
+        switch (rawStatus) {
+            case 'POSTPONED': return <span className="bg-gray-500 text-white text-[10px] px-2 py-0.5 rounded font-bold">ADIADO</span>;
+            case 'SUSPENDED': return <span className="bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded font-bold">SUSPENSO</span>;
+            case 'CANCELLED': return <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded font-bold">CANCELADO</span>;
+        }
+
+        // 2. Standard Logic
         const minutesToStart = differenceInMinutes(matchDate, now);
         const showCountdown = minutesToStart < 60 && minutesToStart > 0 && !isLive && !isFinished;
         const isSoon = minutesToStart < 180 && minutesToStart >= 60 && !isLive && !isFinished;
 
-        if (isLive) return <span className="text-[10px] font-bold text-red-600 animate-pulse bg-red-100 px-2 py-0.5 rounded-full">AO VIVO</span>;
+        if (isLive) return <span className="text-[10px] font-bold text-red-600 animate-pulse bg-red-100 px-2 py-0.5 rounded-full flex items-center gap-1"><span className="w-1.5 h-1.5 bg-red-600 rounded-full" />AO VIVO</span>;
         if (isFinished) return <span className="text-[10px] font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">FINAL</span>;
         if (showCountdown) return <div onClick={(e) => e.stopPropagation()}><Countdown targetDate={matchDate} /></div>;
         if (isSoon) return <span className="text-[10px] font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">EM BREVE</span>;
-        return null; // For standard scheduled, we show generic text or nothing if strict
+
+        return null;
     };
 
     const TeamDisplay = ({ name, crest, align }: { name: string, crest?: string, align: 'left' | 'right' }) => (
@@ -362,6 +385,34 @@ export function UnifiedMatchCard({
                     <div className="border-t bg-muted/10 p-4 animate-in slide-in-from-top-1 cursor-default" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-3">
                             <h4 className="font-bold text-xs uppercase text-muted-foreground tracking-wider">Palpites da Galera</h4>
+
+                            {/* ADMIN CONTROLS IN EXPANDED VIEW */}
+                            {isAdmin && (
+                                <div className="flex gap-2 ml-auto">
+                                    <Button
+                                        size="sm"
+                                        variant={match.isManual ? "destructive" : "outline"}
+                                        className="h-6 text-[10px]"
+                                        onClick={async () => {
+                                            await updateDoc(doc(db, "matches", match.id), { isManual: !match.isManual });
+                                        }}
+                                    >
+                                        {match.isManual ? "Destravar Cron" : "Travar (Manual)"}
+                                    </Button>
+
+                                    <Button
+                                        size="sm"
+                                        variant={match.betsOpen ? "default" : "secondary"}
+                                        className={`h-6 text-[10px] ${match.betsOpen ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                                        onClick={async () => {
+                                            await updateDoc(doc(db, "matches", match.id), { betsOpen: !match.betsOpen });
+                                        }}
+                                    >
+                                        {match.betsOpen ? "Apostas Abertas" : "Reabrir Apostas"}
+                                    </Button>
+                                </div>
+                            )}
+
                             <span className="text-[10px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground">{predictions.length} palpites</span>
                         </div>
 
