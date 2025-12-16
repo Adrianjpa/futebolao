@@ -150,7 +150,7 @@ export function ChampionBanner({ championshipName, config, winners, className, t
 
                     {/* Simple Footer */}
                     <div className="mt-auto text-center opacity-70">
-                        <p className="uppercase text-white font-semibold" style={{ fontSize: "1.8cqw" }}>Futboleiros • Hall da Fama</p>
+                        <p className="uppercase text-white font-semibold" style={{ fontSize: "1.8cqw" }}>FuteBolão • Hall da Fama</p>
                     </div>
                 </div>
             </div>
@@ -269,7 +269,7 @@ export function ChampionBanner({ championshipName, config, winners, className, t
                 {/* Footer */}
                 <div className="w-full text-center mt-auto pt-[4cqw] opacity-60">
                     <p style={{ color: "white", fontSize: "2cqw", letterSpacing: "0.2em" }}>
-                        FUTBOLEIROS • HALL DA FAMA
+                        FUTEBOLÃO • HALL DA FAMA
                     </p>
                 </div>
             </div>

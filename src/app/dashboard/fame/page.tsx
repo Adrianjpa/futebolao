@@ -79,7 +79,7 @@ export default function HallOfFamePage() {
             <div className="flex flex-col gap-2">
                 <h1 className="text-3xl font-bold tracking-tight">🏆 Hall da Fama</h1>
                 <p className="text-muted-foreground">
-                    A glória eterna dos campeões do Futboleiros.
+                    A glória eterna dos campeões do FuteBolão.
                 </p>
             </div>
 

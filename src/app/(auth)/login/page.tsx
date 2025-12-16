@@ -43,11 +43,11 @@ export default function LoginPage() {
                 <div className="flex justify-center mb-4">
                     {/* Light Mode - Colored Shield */}
                     <div className="dark:hidden h-16 w-16">
-                        <img src="/images/logo-shield-color.png" alt="Futboleiros" className="h-full w-full object-contain" />
+                        <img src="/images/logo-shield-color.png" alt="FuteBolão" className="h-full w-full object-contain" />
                     </div>
                     {/* Dark Mode - White Shield */}
                     <div className="hidden dark:block h-16 w-16">
-                        <img src="/images/logo-shield-white.png" alt="Futboleiros" className="h-full w-full object-contain" />
+                        <img src="/images/logo-shield-white.png" alt="FuteBolão" className="h-full w-full object-contain" />
                     </div>
                 </div>
                 <CardTitle className="text-2xl font-bold">Bem-vindo de volta</CardTitle>

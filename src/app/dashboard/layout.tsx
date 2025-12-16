@@ -87,13 +87,13 @@ export default function DashboardLayout({
           md:relative md:translate-x-0 shadow-2xl flex flex-col h-full
         `}>
                     <div className="h-16 flex items-center px-6 border-b border-white/10 shrink-0">
-                        {/* Light Mode Logo */}
+                        {/* Light Mode Logo (Colored/Dark) */}
                         <div className="dark:hidden h-14 w-auto">
-                            <img src="/images/logo-full-light.png" alt="Futboleiros" className="h-full w-auto object-contain" />
+                            <img src="/images/logo-full-dark.png" alt="FuteBolão" className="h-full w-auto object-contain" />
                         </div>
-                        {/* Dark Mode Logo */}
+                        {/* Dark Mode Logo (White/Light) */}
                         <div className="hidden dark:block h-14 w-auto">
-                            <img src="/images/logo-full-dark.png" alt="Futboleiros" className="h-full w-auto object-contain" />
+                            <img src="/images/logo-full-light.png" alt="FuteBolão" className="h-full w-auto object-contain" />
                         </div>
                     </div>
 

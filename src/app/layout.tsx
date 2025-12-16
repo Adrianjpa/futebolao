@@ -15,13 +15,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Futboleiros",
+  title: "FuteBolão",
   description: "O melhor bolão de futebol entre amigos.",
   manifest: "/manifest.json",
   // appleWebApp: {
   //   capable: true,
   //   statusBarStyle: "black-translucent",
-  //   title: "Futboleiros",
+  //   title: "FuteBolão",
   // },
 };
 

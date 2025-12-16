@@ -132,13 +132,13 @@ export default function LandingClient() {
       <Card className="w-full max-w-md border-primary/20 shadow-2xl shadow-primary/10">
         <CardHeader className="text-center pb-2">
           <div className="flex justify-center mb-6">
-            {/* Light Mode Logo */}
+            {/* Light Mode Logo (Colored/Dark) */}
             <div className="dark:hidden h-16 w-auto">
-              <img src="/images/logo-full-light.png" alt="Futboleiros" className="h-full w-auto object-contain" />
+              <img src="/images/logo-full-dark.png" alt="FuteBolão" className="h-full w-auto object-contain" />
             </div>
-            {/* Dark Mode Logo */}
+            {/* Dark Mode Logo (White/Light) */}
             <div className="hidden dark:block h-16 w-auto">
-              <img src="/images/logo-full-dark.png" alt="Futboleiros" className="h-full w-auto object-contain" />
+              <img src="/images/logo-full-light.png" alt="FuteBolão" className="h-full w-auto object-contain" />
             </div>
           </div>
           <CardDescription className="text-base">
@@ -282,7 +282,7 @@ export default function LandingClient() {
           </Tabs>
         </CardContent>
         <CardFooter className="flex justify-center text-xs text-muted-foreground pb-6">
-          © 2024 Futboleiros
+          © 2024 FuteBolão
         </CardFooter>
       </Card>
     </div>
