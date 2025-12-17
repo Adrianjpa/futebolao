@@ -134,11 +134,11 @@ export default function LandingClient() {
           <div className="flex justify-center mb-6">
             {/* Light Mode Logo (Colored/Dark) */}
             <div className="dark:hidden h-16 w-auto">
-              <img src="/images/logo-full-dark.png" alt="FuteBolão" className="h-full w-auto object-contain" />
+              <img src="/images/logo-full-dark.png?v=2" alt="FuteBolão" className="h-full w-auto object-contain" />
             </div>
             {/* Dark Mode Logo (White/Light) */}
             <div className="hidden dark:block h-16 w-auto">
-              <img src="/images/logo-full-light.png" alt="FuteBolão" className="h-full w-auto object-contain" />
+              <img src="/images/logo-full-light.png?v=2" alt="FuteBolão" className="h-full w-auto object-contain" />
             </div>
           </div>
           <CardDescription className="text-base">
