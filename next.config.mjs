@@ -13,5 +13,5 @@ const nextConfig = {
   turbopack: false, // Force webpack for PWA compatibility
 };
 
-export default withPWA(nextConfig);
-// export default nextConfig;
+// export default withPWA(nextConfig);
+export default nextConfig;
