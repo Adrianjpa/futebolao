@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { collection, query, where, orderBy, getDocs, doc, writeBatch, serverTimestamp, getDoc, onSnapshot } from "firebase/firestore";
+import { collection, query, where, orderBy, limit, getDocs, doc, writeBatch, serverTimestamp, getDoc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase"; // Fix import path
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
