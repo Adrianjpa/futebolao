@@ -18,7 +18,8 @@ import {
     History,
     Swords,
     MessageSquare,
-    Shield
+    Shield,
+    Activity
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -56,6 +57,7 @@ export default function DashboardLayout({
         { href: "/admin/championships", label: "Campeonatos", icon: Trophy },
         { href: "/admin/messaging", label: "Mensagens", icon: MessageSquare },
         { href: "/admin/settings", label: "Configurações", icon: Settings },
+        { href: "/admin/debug", label: "System Debug", icon: Activity },
     ];
 
     // Filter prediction link for admins if needed (optional, keeping it as it was in previous code if any)

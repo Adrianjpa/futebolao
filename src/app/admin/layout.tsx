@@ -16,7 +16,8 @@ import {
     Settings,
     LogOut,
     Menu,
-    ArrowLeft
+    ArrowLeft,
+    Activity
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -45,6 +46,7 @@ export default function AdminLayout({
 
         { href: "/admin/messaging", label: "Mensagens", icon: MessageSquare },
         { href: "/admin/settings", label: "Configurações", icon: Settings },
+        { href: "/admin/debug", label: "Debug", icon: Activity },
     ];
 
     return (
