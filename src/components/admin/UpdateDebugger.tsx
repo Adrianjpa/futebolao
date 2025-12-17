@@ -18,6 +18,7 @@ export function UpdateDebugger() {
 
     const activeMatchesRef = useRef<any[]>([]);
     const championshipsMapRef = useRef<Record<string, any>>({});
+    const [lastSystemUpdate, setLastSystemUpdate] = useState<Date | null>(null);
 
     // 1. Fetch Static Data & Listeners
     useEffect(() => {
@@ -31,6 +32,21 @@ export function UpdateDebugger() {
             championshipsMapRef.current = champMap;
         };
         fetchChamps();
+
+        // Check last system update (proven by DB)
+        const fetchLastUpdate = async () => {
+            const q = query(collection(db, "matches"), orderBy("lastUpdated", "desc"), limit(1));
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+                const date = snap.docs[0].data().lastUpdated?.toDate();
+                if (date) setLastSystemUpdate(date);
+            }
+        };
+        fetchLastUpdate();
+
+        // Poll for last update every minute to show cron activity
+        const pollInterval = setInterval(fetchLastUpdate, 60000);
+        return () => clearInterval(pollInterval);
     }, []);
 
     useEffect(() => {
@@ -256,10 +272,17 @@ export function UpdateDebugger() {
     return (
         <Card className="bg-slate-950 text-slate-200 border-slate-800">
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm font-mono flex items-center gap-2">
-                    <Activity className="h-4 w-4 text-blue-400" />
-                    Debug de Atualização
-                </CardTitle>
+                <div>
+                    <CardTitle className="text-sm font-mono flex items-center gap-2">
+                        <Activity className="h-4 w-4 text-blue-400" />
+                        Debug de Atualização
+                    </CardTitle>
+                    {lastSystemUpdate && (
+                        <p className="text-[10px] text-muted-foreground font-mono mt-1 ml-6">
+                            Última atualização do sistema: <span className="text-green-400 font-bold">{lastSystemUpdate.toLocaleTimeString()}</span>
+                        </p>
+                    )}
+                </div>
                 <div className="flex items-center gap-2">
                     <Button
                         size="sm"
