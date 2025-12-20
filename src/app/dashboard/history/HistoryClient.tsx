@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 interface Championship {
     id: string;
     name: string;
+    category?: string;
 }
 
 interface Match {
@@ -32,6 +33,7 @@ const ITEMS_PER_PAGE = 10;
 
 export default function HistoryClient() {
     const [championships, setChampionships] = useState<Championship[]>([]);
+    const [categoryFilter, setCategoryFilter] = useState("all");
     const [selectedChampionship, setSelectedChampionship] = useState<string>("all");
     const [matches, setMatches] = useState<Match[]>([]);
     const [users, setUsers] = useState<any[]>([]);
@@ -42,16 +44,21 @@ export default function HistoryClient() {
     const [currentPage, setCurrentPage] = useState(1);
     const [isLastPage, setIsLastPage] = useState(false);
 
+    // Computed
+    const filteredChampionships = championships.filter(c => {
+        if (categoryFilter === 'all') return true;
+        return (c.category || 'other') === categoryFilter;
+    });
+
     useEffect(() => {
         fetchChampionships();
         fetchUsers();
     }, []);
 
     useEffect(() => {
-        if (championships.length > 0 || selectedChampionship === 'all') {
-            loadPage(1);
-        }
-    }, [selectedChampionship, championships]);
+        // Debounce or just load when filters change
+        loadPage(1);
+    }, [selectedChampionship, categoryFilter, championships]);
 
     const fetchChampionships = async () => {
         const q = query(collection(db, "championships"));
@@ -76,18 +83,50 @@ export default function HistoryClient() {
         setLoading(true);
         try {
             let baseQuery;
-            if (selectedChampionship === "all") {
-                baseQuery = query(collection(db, "matches"), where("status", "==", "finished"), orderBy("date", "desc"));
+
+            if (selectedChampionship !== "all") {
+                // Specific Championship selected
+                baseQuery = query(
+                    collection(db, "matches"),
+                    where("championshipId", "==", selectedChampionship),
+                    where("status", "==", "finished"),
+                    orderBy("date", "desc")
+                );
+            } else if (categoryFilter !== "all") {
+                // Category selected (get IDs of championships in this category)
+                const categoryChampIds = filteredChampionships.map(c => c.id);
+
+                if (categoryChampIds.length === 0) {
+                    // No championships in this category, return empty
+                    setMatches([]);
+                    setLoading(false);
+                    return;
+                }
+
+                // Firestore 'in' limit is 10. If > 10, we might need to batch or just filter client side after fetching by date.
+                // For now, let's assume < 10 for specific categories or take top 10. 
+                // A better approach for scalability is to duplicate 'category' on the match document.
+                // PROPOSAL: Since we can't easily edit all matches now, take the first 10 IDs.
+                const safeIds = categoryChampIds.slice(0, 10);
+
+                baseQuery = query(
+                    collection(db, "matches"),
+                    where("championshipId", "in", safeIds),
+                    where("status", "==", "finished"),
+                    orderBy("date", "desc")
+                );
             } else {
-                baseQuery = query(collection(db, "matches"), where("championshipId", "==", selectedChampionship), where("status", "==", "finished"), orderBy("date", "desc"));
+                // All Matches
+                baseQuery = query(
+                    collection(db, "matches"),
+                    where("status", "==", "finished"),
+                    orderBy("date", "desc")
+                );
             }
 
             // Determine Start After Doc
             let startAfterDoc = null;
-            if (page > 1) {
-                // To load Page X, we need the last doc of Page X-1.
-                // Stack index for Page 1 end is 0. 
-                // So for Page 2 start, we need stack[0].
+            if (page > 1 && stack[page - 2]) {
                 startAfterDoc = stack[page - 2];
             }
 
@@ -115,16 +154,17 @@ export default function HistoryClient() {
             setCurrentPage(page);
             setIsLastPage(snap.docs.length < ITEMS_PER_PAGE);
 
-            // Update Stack if we just loaded a new page that we haven't tracked yet
-            // If we are on Page 1, we save its last doc to index 0.
+            // Update Stack
             if (snap.docs.length > 0) {
                 const lastDoc = snap.docs[snap.docs.length - 1];
                 setPageStack(prev => {
                     const newStack = [...prev];
-                    // Ensure we set the stack at the correct index for this page
                     newStack[page - 1] = lastDoc;
                     return newStack;
                 });
+            } else if (page > 1) {
+                // If we got no results but page > 1, it means we reached empty end?
+                setIsLastPage(true);
             }
 
         } catch (error) {
@@ -151,18 +191,37 @@ export default function HistoryClient() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <h1 className="text-3xl font-bold tracking-tight">Histórico de Partidas</h1>
 
-                <div className="w-full md:w-1/3">
+                <div className="flex gap-4 w-full md:w-2/3">
+                    <Select value={categoryFilter} onValueChange={(val) => {
+                        setCategoryFilter(val);
+                        setSelectedChampionship("all"); // Reset specific championship which might not belong to new category
+                        setPageStack([]);
+                    }}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Categoria" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Todas Categorias</SelectItem>
+                            <SelectItem value="world_cup">Copa do Mundo</SelectItem>
+                            <SelectItem value="euro">Eurocopa</SelectItem>
+                            <SelectItem value="copa_america">Copa América</SelectItem>
+                            <SelectItem value="brasileirao">Brasileirão</SelectItem>
+                            <SelectItem value="champions_league">Champions League</SelectItem>
+                            <SelectItem value="libertadores">Libertadores</SelectItem>
+                            <SelectItem value="other">Outros</SelectItem>
+                        </SelectContent>
+                    </Select>
+
                     <Select value={selectedChampionship} onValueChange={(val) => {
                         setSelectedChampionship(val);
-                        setPageStack([]); // Reset stack on filter change
-                        // loadPage(1) will trigger via useEffect
+                        setPageStack([]);
                     }}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Filtrar por Campeonato" />
+                        <SelectTrigger className="flex-1">
+                            <SelectValue placeholder="Campeonato" />
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">Todos os Campeonatos</SelectItem>
-                            {championships.map(c => (
+                            {filteredChampionships.map(c => (
                                 <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                             ))}
                         </SelectContent>

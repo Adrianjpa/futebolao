@@ -7,6 +7,10 @@ export interface BannerConfig {
     titleColor: string; // Hex color for "GANHADORES"
     subtitleColor: string; // Hex color for subtitles
     namesColor: string; // Hex color for user names
+    backgroundScale?: number; // Zoom level (100 = 100%, 200 = 200%)
+    backgroundPosX?: number; // 0 to 100%
+    backgroundPosY?: number; // 0 to 100%
+    customFontSizeOffset?: number; // Additional size in cqw (default 0)
 }
 
 export interface ChampionPredictionSettings {

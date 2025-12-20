@@ -7,6 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Activity, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
+import { BannerConfigForm } from "@/components/banner/BannerConfigForm";
+import { ChampionBanner } from "@/components/banner/ChampionBanner";
+import { BannerConfig, BannerWinner } from "@/types/banner";
 
 export function UpdateDebugger() {
     const [loading, setLoading] = useState(true);
@@ -19,6 +22,50 @@ export function UpdateDebugger() {
     const activeMatchesRef = useRef<any[]>([]);
     const championshipsMapRef = useRef<Record<string, any>>({});
     const [lastSystemUpdate, setLastSystemUpdate] = useState<Date | null>(null);
+
+    const [legacyBannerMode, setLegacyBannerMode] = useState(false);
+    const [legacyWinners, setLegacyWinners] = useState<BannerWinner[]>([]);
+    const [bannerConfig, setBannerConfig] = useState<BannerConfig>({
+        active: true,
+        titleColor: "#FFFFFF",
+        subtitleColor: "#FBBF24",
+        namesColor: "#FFFFFF",
+        displayMode: "photo_and_names",
+        layoutStyle: "modern"
+    });
+
+    const handleLoadLegacyForBanner = async () => {
+        try {
+            // Simplified for this tool: Hardcoded known winners from the JSON we just processed
+            const winners: BannerWinner[] = [
+                {
+                    userId: "adriano_legacy",
+                    displayName: "Adriano",
+                    photoUrl: "",
+                    position: "champion"
+                },
+                {
+                    userId: "elisson_legacy",
+                    displayName: "Elisson",
+                    photoUrl: "",
+                    position: "gold_winner"
+                },
+                {
+                    userId: "anderson_legacy",
+                    displayName: "Anderson",
+                    photoUrl: "",
+                    position: "gold_winner"
+                }
+            ];
+
+            setLegacyWinners(winners);
+            setLegacyBannerMode(!legacyBannerMode);
+            setDebugLogs(prev => [...prev, "Dados da Euro 2012 carregados para o Banner!"]);
+
+        } catch (e) {
+            console.error(e);
+        }
+    };
 
     // 1. Fetch Static Data & Listeners
     useEffect(() => {
@@ -326,6 +373,126 @@ export function UpdateDebugger() {
                         ) : (
                             <span className="text-slate-500">Aguardando execução...</span>
                         )}
+                    </div>
+                </div>
+
+                <div className="border-t border-slate-800 pt-4 mt-4">
+                    <h3 className="text-sm font-bold text-amber-500 mb-2">Ferramentas de Migração (Legacy)</h3>
+                    <div className="flex gap-2 mb-4">
+                        <Button
+                            onClick={async () => {
+                                if (!confirm("Importar dados da Euro 2012?")) return;
+                                setDebugLogs(prev => [...prev, "Iniciando importação Euro 2012..."]);
+                                try {
+                                    const res = await fetch("/api/admin/import-legacy", { method: "POST" });
+                                    const data = await res.json();
+                                    setDebugLogs(prev => [...prev, `Importação: ${data.message}`]);
+                                } catch (e) {
+                                    setDebugLogs(prev => [...prev, `Erro Importação: ${e}`]);
+                                }
+                            }}
+                            size="sm"
+                            className="bg-amber-900 border-amber-700 hover:bg-amber-800 text-amber-100"
+                        >
+                            Importar Euro 2012 (Teste)
+                        </Button>
+
+                        <Button
+                            onClick={handleLoadLegacyForBanner}
+                            size="sm"
+                            variant="outline"
+                            className="border-amber-700 text-amber-500 hover:bg-amber-950"
+                        >
+                            {legacyBannerMode ? "Fechar Gerador" : "Gerar Banner Euro 2012"}
+                        </Button>
+                    </div>
+
+                    {legacyBannerMode && (
+                        <div className="bg-slate-900 p-4 rounded border border-slate-700 animate-in slide-in-from-top-2">
+                            <h4 className="font-bold text-white mb-4">Configurar Banner Euro 2012</h4>
+
+                            <div className="mb-6 flex justify-center">
+                                <div className="w-full max-w-[500px] shadow-2xl">
+                                    <ChampionBanner
+                                        championshipName="Eurocopa 2012"
+                                        config={bannerConfig}
+                                        winners={legacyWinners}
+                                        teamMode="selecoes"
+                                    />
+                                </div>
+                            </div>
+
+                            <BannerConfigForm
+                                config={bannerConfig}
+                                onChange={setBannerConfig}
+                                hasTies={legacyWinners.filter(w => w.position === 'champion').length > 1 || legacyWinners.filter(w => w.position === 'gold_winner').length > 1}
+                            />
+
+                            <div className="mt-4 flex justify-end border-t border-slate-800 pt-4">
+                                <Button
+                                    onClick={async () => {
+                                        if (!confirm("Salvar e publicar banner na página Hall da Fama?")) return;
+                                        try {
+                                            const { setDoc, doc, Timestamp } = await import("firebase/firestore");
+
+                                            // Euro 2012 ID hardcoded for this tool
+                                            const champId = "uefa_euro_2012";
+                                            const champRef = doc(db, "championships", champId);
+
+                                            await setDoc(champRef, {
+                                                name: "Eurocopa 2012",
+                                                status: "finished", // Important for Archive logic
+                                                endDate: Timestamp.now(), // Use now or a fixed date
+                                                bannerEnabled: true,
+                                                bannerConfig: bannerConfig,
+                                                manualWinners: legacyWinners,
+                                                teamMode: "selecoes",
+                                                // Minimal fields for app compatibility
+                                                admins: ["adriano"],
+                                                participants: ["adriano", "elisson", "anderson"],
+                                                rules: {},
+                                                category: "euro"
+                                            }, { merge: true });
+
+                                            console.log("Banner salvo com sucesso!");
+                                            setDebugLogs(prev => [...prev, "Banner da Euro 2012 salvo e publicado no Hall da Fama!"]);
+                                            alert("Banner Salvo! Verifique na página Hall da Fama.");
+
+                                        } catch (e) {
+                                            console.error("Erro ao salvar banner", e);
+                                            alert("Erro ao salvar: " + e);
+                                        }
+                                    }}
+                                    className="bg-green-600 hover:bg-green-700 text-white font-bold"
+                                >
+                                    Salvar (Publicar no Hall)
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="mt-4 pt-4 border-t border-slate-800 space-y-2">
+                        <h4 className="text-xs font-bold text-slate-500 uppercase">Ações de Banco de Dados</h4>
+                        <Button
+                            onClick={async () => {
+                                if (!confirm("Importar tabela de jogos da Euro 2012?")) return;
+                                setDebugLogs(prev => [...prev, "Iniciando importação de partidas..."]);
+                                try {
+                                    const res = await fetch("/api/admin/import-legacy?mode=matches", { method: "POST" });
+                                    const data = await res.json();
+                                    setDebugLogs(prev => [...prev, `Jogos: ${data.message}`]);
+                                    alert(data.message);
+                                } catch (e) {
+                                    setDebugLogs(prev => [...prev, `Erro: ${e}`]);
+                                    alert("Erro ao importar jogos");
+                                }
+                            }}
+                            size="sm"
+                            variant="secondary"
+                            className="w-full border-slate-700 hover:bg-slate-800"
+                        >
+                            Importar Jogos Euro 2012 (Histórico)
+                        </Button>
                     </div>
                 </div>
             </CardContent>

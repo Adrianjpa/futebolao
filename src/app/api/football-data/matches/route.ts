@@ -20,6 +20,10 @@ export async function GET(request: Request) {
     if (dateFrom) params.append("dateFrom", dateFrom);
     if (dateTo) params.append("dateTo", dateTo);
 
+    // Add season support
+    const season = searchParams.get("season");
+    if (season) params.append("season", season);
+
     if (code) {
         url = `${BASE_URL}/competitions/${code}/matches`;
     } else {

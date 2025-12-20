@@ -13,6 +13,7 @@ import { db } from "@/lib/firebase";
 import { calculatePoints } from "@/lib/scoring";
 import Link from "next/link";
 import { Countdown } from "@/components/ui/countdown";
+import { getFlagUrl } from "@/lib/utils";
 
 interface Match {
     id: string;
@@ -65,7 +66,6 @@ export function UnifiedMatchCard({
     const isFinished = finished ?? (match.status === 'finished' || match.status === 'FINISHED');
 
     // Urgency & Locking
-    // Urgency & Locking
     const isUrgent = !isAdmin && hoursDiff < 2 && hoursDiff >= 0 && !isFinished && !isLive;
 
     // NEW: Locking Logic with Override
@@ -76,8 +76,6 @@ export function UnifiedMatchCard({
 
     const canEdit = isAdmin && (isLive || isFinished || match.isManual) && match.championshipType !== 'AUTO'; // Allow edit if Manual
     const canFinish = isAdmin && (isLive || match.isManual);
-
-
 
     // States
     const [isEditing, setIsEditing] = useState(false);
@@ -159,7 +157,6 @@ export function UnifiedMatchCard({
 
     // Unified Status Badge Component
     const StatusBadge = () => {
-        // 1. Check for specific API statuses first (Postponed, etc)
         const rawStatus = match.apiStatus || match.status;
         switch (rawStatus) {
             case 'POSTPONED': return <span className="bg-gray-500 text-white text-[10px] px-2 py-0.5 rounded font-bold">ADIADO</span>;
@@ -167,7 +164,6 @@ export function UnifiedMatchCard({
             case 'CANCELLED': return <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded font-bold">CANCELADO</span>;
         }
 
-        // 2. Standard Logic
         const minutesToStart = differenceInMinutes(matchDate, now);
         const showCountdown = minutesToStart < 60 && minutesToStart > 0 && !isLive && !isFinished;
         const isSoon = minutesToStart < 180 && minutesToStart >= 60 && !isLive && !isFinished;
@@ -180,51 +176,48 @@ export function UnifiedMatchCard({
         return null;
     };
 
-    const TeamDisplay = ({ name, crest, align }: { name: string, crest?: string, align: 'left' | 'right' }) => (
-        <>
-            {/* Desktop: Name and Crest */}
-            <div className={`hidden md:flex items-center gap-3 flex-1 ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
-                {align === 'right' && <span className="font-bold text-sm lg:text-base text-right truncate">{name}</span>}
-                <div className="h-10 w-10 relative flex items-center justify-center">
-                    {crest ? (
-                        <img src={crest} alt={name} className="max-h-full max-w-full object-contain" />
-                    ) : (
-                        <div className="h-full w-full bg-muted rounded flex items-center justify-center text-[10px] font-bold">{(name || "").substring(0, 2)}</div>
-                    )}
-                </div>
-                {align === 'left' && <span className="font-bold text-sm lg:text-base text-left truncate">{name}</span>}
-            </div>
+    const TeamDisplay = ({ name, crest, align }: { name: string, crest?: string, align: 'left' | 'right' }) => {
+        const flag = crest || getFlagUrl(name);
 
-            {/* Mobile: Crest Only with Popover for Name */}
-            <div className={`md:hidden flex items-center ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
-                <Popover>
-                    <PopoverTrigger asChild>
-                        <div className="cursor-pointer active:scale-95 transition-transform relative h-12 w-12 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-                            {crest ? (
-                                <img src={crest} alt={name} className="max-h-full max-w-full object-contain" />
-                            ) : (
-                                <div className="h-8 w-8 bg-muted rounded flex items-center justify-center text-[10px] font-bold">{(name || "").substring(0, 2)}</div>
-                            )}
-                        </div>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-2 text-xs font-bold text-center z-50 shadow-md border-primary/20" side="top">
-                        {name}
-                    </PopoverContent>
-                </Popover>
-            </div>
-        </>
-    );
+        return (
+            <>
+                {/* Desktop: Name and Crest */}
+                <div className={`hidden md:flex items-center gap-3 flex-1 ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
+                    {align === 'right' && <span className="font-bold text-sm lg:text-base text-right truncate">{name}</span>}
+                    <div className="h-10 w-10 relative flex items-center justify-center">
+                        {flag ? (
+                            <img src={flag} alt={name} className="max-h-full max-w-full object-contain" />
+                        ) : (
+                            <div className="h-full w-full bg-muted rounded flex items-center justify-center text-[10px] font-bold">{(name || "").substring(0, 2)}</div>
+                        )}
+                    </div>
+                    {align === 'left' && <span className="font-bold text-sm lg:text-base text-left truncate">{name}</span>}
+                </div>
+
+                {/* Mobile: Crest Only with Popover for Name */}
+                <div className={`md:hidden flex items-center ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <div className="cursor-pointer active:scale-95 transition-transform relative h-12 w-12 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                                {flag ? (
+                                    <img src={flag} alt={name} className="max-h-full max-w-full object-contain" />
+                                ) : (
+                                    <div className="h-8 w-8 bg-muted rounded flex items-center justify-center text-[10px] font-bold">{(name || "").substring(0, 2)}</div>
+                                )}
+                            </div>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-2 text-xs font-bold text-center z-50 shadow-md border-primary/20" side="top">
+                            {name}
+                        </PopoverContent>
+                    </Popover>
+                </div>
+            </>
+        );
+    };
 
     return (
         <Card className={`group relative overflow-hidden transition-colors duration-300 border hover:bg-accent/5 cursor-pointer`} onClick={handleToggleExpand}>
             <CardContent className="p-0">
-
-                {/* 
-                    LAYOUT STRUCTURE:
-                    Row 1 (Header): [Round/Phase] --- [Championship (if needed)] --- [Status]
-                    Row 2 (Main): [Team A] -- [Score] -- [Team B]
-                    Row 3 (Footer - Center): [Date/Time]
-                */}
 
                 {/* HEADER ROW - Desktop & Mobile adapted */}
                 <div className="flex items-center justify-between px-3 pt-2 pb-1 text-xs text-muted-foreground w-full relative">
@@ -419,22 +412,48 @@ export function UnifiedMatchCard({
                         {loadingPreds ? (
                             <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-primary/50" /></div>
                         ) : predictions.length > 0 ? (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                            <div className="flex flex-col gap-2">
                                 {predictions.map(pred => {
                                     const user = users.find(u => u.id === pred.userId);
                                     const isExact = pred.homeScore === match.homeScore && pred.awayScore === match.awayScore;
+                                    const isHit = pred.points > 0;
+
+                                    // Determine Styles based on points
+                                    let rowBg = "bg-red-500/10 border-red-500/20 hover:bg-red-500/20";
+                                    let pointsBadge = "bg-red-500 text-white";
+
+                                    if (isExact) {
+                                        rowBg = "bg-green-500/20 border-green-500/30 hover:bg-green-500/30";
+                                        pointsBadge = "bg-green-600 text-white";
+                                    } else if (isHit) {
+                                        rowBg = "bg-blue-500/20 border-blue-500/30 hover:bg-blue-500/30";
+                                        pointsBadge = "bg-blue-600 text-white";
+                                    }
 
                                     return (
-                                        <div key={pred.matchId + pred.userId} className={`flex items-center p-2 rounded-lg border text-xs gap-2 transition-colors ${isExact ? 'bg-green-500/10 border-green-500/30' : 'bg-background hover:bg-muted'}`}>
-                                            <Avatar className="h-6 w-6 border">
-                                                <AvatarImage src={user?.photoURL} />
-                                                <AvatarFallback className="text-[8px]">{user?.name?.substring(0, 2).toUpperCase()}</AvatarFallback>
-                                            </Avatar>
-                                            <div className="flex flex-col min-w-0">
-                                                <span className="font-bold truncate w-20 leading-tight">{user?.name || "..."}</span>
-                                                <span className="font-mono text-[10px] opacity-80">{pred.homeScore} - {pred.awayScore}</span>
+                                        <div key={pred.matchId + (pred.userId || pred.userName)} className={`flex items-center p-3 rounded-xl border mb-1 transition-colors shadow-sm ${rowBg}`}>
+                                            {/* Left: Avatar + Name */}
+                                            <div className="flex items-center gap-3 w-1/3">
+                                                <Avatar className="h-8 w-8 border-2 border-background/50">
+                                                    <AvatarImage src={user?.photoURL} />
+                                                    <AvatarFallback className="text-[10px] font-bold">{(user?.name || pred.userName || "?").substring(0, 2).toUpperCase()}</AvatarFallback>
+                                                </Avatar>
+                                                <span className="font-bold text-sm truncate leading-tight opacity-90">{user?.name || pred.userName || "..."}</span>
                                             </div>
-                                            {pred.points > 0 && <span className={`ml-auto font-bold ${isExact ? 'text-green-600' : 'text-blue-500'}`}>+{pred.points}</span>}
+
+                                            {/* Center: Prediction Score */}
+                                            <div className="flex-1 flex justify-center">
+                                                <div className="px-4 py-1.5 bg-background/40 rounded-lg font-mono text-base font-black tracking-widest border border-white/10 shadow-inner">
+                                                    {pred.homeScore} - {pred.awayScore}
+                                                </div>
+                                            </div>
+
+                                            {/* Right: Points Badge */}
+                                            <div className="w-1/3 flex justify-end">
+                                                <span className={`h-8 w-8 flex items-center justify-center rounded-full text-xs font-black shadow-lg ${pointsBadge}`}>
+                                                    {pred.points > 0 ? `+${pred.points}` : "0"}
+                                                </span>
+                                            </div>
                                         </div>
                                     );
                                 })}

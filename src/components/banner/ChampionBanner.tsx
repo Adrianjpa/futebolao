@@ -25,6 +25,7 @@ export function ChampionBanner({ championshipName, config, winners, className, t
     // Rule: Force classic layout if there are ties (more than 1 winner in any category)
     const hasTies = champions.length > 1 || goldWinners.length > 1;
     const layout = hasTies ? 'classic' : (config.layoutStyle || "modern");
+    const displayMode = hasTies ? 'names_only' : (config.displayMode || 'photo_and_names');
 
     // Determine subtitle based on teamMode
     const goldSubtitle = teamMode === 'selecoes' ? "PALPITES DA SELEÇÃO" : "PALPITES DA EQUIPE";
@@ -34,8 +35,8 @@ export function ChampionBanner({ championshipName, config, winners, className, t
         containerType: "inline-size",
         aspectRatio: "857 / 828",
         backgroundImage: `url(${bgUrl})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
+        backgroundSize: config.backgroundScale ? `${config.backgroundScale}%` : "cover",
+        backgroundPosition: `${config.backgroundPosX ?? 50}% ${config.backgroundPosY ?? 50}%`,
         boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)"
     } as React.CSSProperties;
 
@@ -58,6 +59,10 @@ export function ChampionBanner({ championshipName, config, winners, className, t
             )}
         </div>
     );
+
+    // Font sizing helper
+    const sizeOffset = config.customFontSizeOffset || 0;
+    const getFontSize = (base: number) => `${Math.max(1, base + sizeOffset)}cqw`;
 
     // --- CLASSIC LAYOUT RENDERER ---
     if (layout === 'classic') {
@@ -94,55 +99,74 @@ export function ChampionBanner({ championshipName, config, winners, className, t
                         {/* Champion Section */}
                         <div className="flex flex-col items-center">
                             <h2 className="uppercase font-black italic tracking-wide mb-[1cqw] drop-shadow-md"
-                                style={{ color: subtitleColor, fontSize: "6cqw" }}>
+                                style={{ color: subtitleColor, fontSize: getFontSize(6) }}>
                                 CAMPEÃO GERAL
                             </h2>
                             {/* Winners Grid */}
-                            <div className="flex flex-wrap justify-center gap-[4cqw] w-full">
+                            {/* Champions Names Flow */}
+                            <div className="flex flex-wrap justify-center items-center w-full px-[5cqw] text-center leading-none">
                                 {champions.length > 0 ? champions.map((winner, idx) => (
-                                    <div key={idx} className="flex flex-row items-center gap-[2cqw]">
-                                        {/* Optional Avatar for Classic */}
-                                        {config.displayMode === 'photo_and_names' && (
-                                            <div className="shrink-0">
+                                    <span key={idx} className="inline-flex items-center">
+                                        {displayMode === 'photo_and_names' && (
+                                            <div className="mr-[1cqw]">
                                                 {renderAvatar(winner.photoUrl, 12, subtitleColor)}
                                             </div>
                                         )}
-                                        <span className="font-extrabold uppercase drop-shadow-md leading-tight text-left"
+                                        <span className="font-extrabold uppercase drop-shadow-md"
                                             style={{ color: namesColor, fontSize: champions.length > 1 ? "6cqw" : "8cqw" }}>
                                             {winner.displayName}
                                         </span>
-                                    </div>
-                                )) : (
-                                    <span className="font-extrabold uppercase drop-shadow-md opacity-50" style={{ color: namesColor, fontSize: "5cqw" }}>
-                                        A DEFINIR
+                                        {/* Graphic Separator - Only if not last */}
+                                        {idx < champions.length - 1 && (
+                                            <span
+                                                className="mx-[1.5cqw] rounded-full inline-block bg-current opacity-80"
+                                                style={{
+                                                    width: "1.5cqw",
+                                                    height: "1.5cqw",
+                                                    color: subtitleColor,
+                                                    marginBottom: "0.2em" // Optical alignment
+                                                }}
+                                            />
+                                        )}
                                     </span>
+                                )) : (
+                                    <span style={{ color: namesColor, fontSize: "5cqw" }}>A DEFINIR</span>
                                 )}
                             </div>
                         </div>
 
-                        {/* Gold Winner Section (Smaller) */}
                         <div className="flex flex-col items-center">
                             <h3 className="uppercase font-bold italic tracking-wide mb-[1cqw] drop-shadow-md"
-                                style={{ color: subtitleColor, fontSize: "4.5cqw" }}>
+                                style={{ color: subtitleColor, fontSize: getFontSize(4.5) }}>
                                 {goldSubtitle}
                             </h3>
-                            <div className="flex flex-wrap justify-center gap-[3cqw] w-full">
+                            <div className="flex flex-wrap justify-center items-center w-full px-[5cqw] text-center leading-none">
                                 {goldWinners.length > 0 ? goldWinners.map((winner, idx) => (
-                                    <div key={idx} className="flex flex-row items-center gap-[2cqw]">
-                                        {config.displayMode === 'photo_and_names' && (
-                                            <div className="shrink-0">
+                                    <span key={idx} className="inline-flex items-center">
+                                        {displayMode === 'photo_and_names' && (
+                                            <div className="mr-[0.8cqw]">
                                                 {renderAvatar(winner.photoUrl, 9, subtitleColor)}
                                             </div>
                                         )}
-                                        <span className="font-bold uppercase drop-shadow-md leading-tight text-left"
+                                        <span className="font-bold uppercase drop-shadow-md"
                                             style={{ color: namesColor, fontSize: goldWinners.length > 1 ? "4cqw" : "5cqw" }}>
                                             {winner.displayName}
                                         </span>
-                                    </div>
-                                )) : (
-                                    <span className="font-bold uppercase drop-shadow-md opacity-50" style={{ color: namesColor, fontSize: "4cqw" }}>
-                                        EM BREVE
+                                        {/* Graphic Separator - Only if not last */}
+                                        {idx < goldWinners.length - 1 && (
+                                            <span
+                                                className="mx-[1.2cqw] rounded-full inline-block bg-current opacity-80"
+                                                style={{
+                                                    width: "1.2cqw",
+                                                    height: "1.2cqw",
+                                                    color: subtitleColor,
+                                                    marginBottom: "0.2em"
+                                                }}
+                                            />
+                                        )}
                                     </span>
+                                )) : (
+                                    <span style={{ color: namesColor, fontSize: "4cqw" }}>EM BREVE</span>
                                 )}
                             </div>
                         </div>

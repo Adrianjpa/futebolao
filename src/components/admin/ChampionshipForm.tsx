@@ -20,6 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChampionBanner } from "@/components/banner/ChampionBanner";
+import { BannerConfigForm } from "@/components/banner/BannerConfigForm";
 import { BannerConfig, BannerWinner } from "@/types/banner";
 
 const formSchema = z.object({
@@ -28,6 +29,7 @@ const formSchema = z.object({
     startDate: z.date(),
     endDate: z.date(),
     type: z.enum(["liga", "copa", "avulso"]),
+    category: z.string().default("other"),
     teamMode: z.enum(["clubes", "selecoes", "mista"]),
     // Rules
     ghostPlayer: z.boolean().default(false),
@@ -150,6 +152,7 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
             startDate: initialData?.startDate ? new Date(initialData.startDate) : undefined,
             endDate: initialData?.endDate ? new Date(initialData.endDate) : undefined,
             type: initialData?.type || "liga",
+            category: initialData?.category || "other",
             teamMode: initialData?.teamMode || "clubes",
             ghostPlayer: initialData?.ghostPlayer ?? false,
             exactScorePoints: initialData?.exactScorePoints ?? 10,
@@ -347,6 +350,28 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
                                 </div>
 
                                 <div className="grid gap-2">
+                                    <Label>Agrupamento (Histórico)</Label>
+                                    <Select
+                                        onValueChange={(val) => form.setValue("category", val)}
+                                        defaultValue={form.watch("category") || "other"}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Selecione" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="world_cup">Copa do Mundo</SelectItem>
+                                            <SelectItem value="euro">Eurocopa</SelectItem>
+                                            <SelectItem value="copa_america">Copa América</SelectItem>
+                                            <SelectItem value="brasileirao">Brasileirão</SelectItem>
+                                            <SelectItem value="libertadores">Libertadores</SelectItem>
+                                            <SelectItem value="champions_league">Champions League</SelectItem>
+                                            <SelectItem value="nacional">Nacional</SelectItem>
+                                            <SelectItem value="other">Outros</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="grid gap-2">
                                     <Label>Modo de Equipes</Label>
                                     <Select
                                         onValueChange={(val) => form.setValue("teamMode", val as "clubes" | "selecoes" | "mista")}
@@ -486,67 +511,20 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
                                     </div>
                                     <p className="text-center text-xs text-muted-foreground">Pré-visualização em tempo real</p>
 
-                                    <div className="grid grid-cols-2 gap-4 border-t pt-4">
-                                        <div className="grid gap-2">
-                                            <Label>Estilo do Banner</Label>
-                                            <Select
-                                                onValueChange={(val) => form.setValue("bannerConfig.layoutStyle", val as "modern" | "classic")}
-                                                value={hasTies ? "classic" : (form.watch("bannerConfig.layoutStyle") || "modern")}
-                                                disabled={hasTies}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Selecione..." />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="modern">Moderno (Cards)</SelectItem>
-                                                    <SelectItem value="classic">Clássico (Texto/Lista)</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            {hasTies && (
-                                                <p className="text-[10px] text-amber-600 font-medium mt-1">
-                                                    Forçado para Clássico (Múltiplos Vencedores)
-                                                </p>
-                                            )}
-                                        </div>
-                                        <div className="grid gap-2">
-                                            <Label>Modo de Exibição</Label>
-                                            <Select
-                                                onValueChange={(val) => form.setValue("bannerConfig.displayMode", val as "photo_and_names" | "names_only")}
-                                                defaultValue={form.watch("bannerConfig.displayMode")}
-                                                disabled={form.watch("bannerConfig.layoutStyle") === "modern"}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="photo_and_names">Foto + Nome</SelectItem>
-                                                    <SelectItem value="names_only">Apenas Nomes</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            {form.watch("bannerConfig.layoutStyle") === "modern" && (
-                                                <p className="text-[10px] text-muted-foreground mt-1">Fixo em Foto + Nome</p>
-                                            )}
-                                        </div>
-                                        <div className="grid gap-2">
-                                            <Label>Cor do Título (Ex: #FFFFFF)</Label>
-                                            <Input {...form.register("bannerConfig.titleColor")} placeholder="#FFFFFF" />
-                                        </div>
-                                        <div className="grid gap-2">
-                                            <Label>Cor do Subtítulo (Ex: #FBBF24)</Label>
-                                            <Input {...form.register("bannerConfig.subtitleColor")} placeholder="#FBBF24" />
-                                        </div>
-                                        <div className="grid gap-2">
-                                            <Label>Cor dos Nomes</Label>
-                                            <Input {...form.register("bannerConfig.namesColor")} placeholder="#FFFFFF" />
-                                        </div>
-                                        <div className="grid gap-2">
-                                            <Label>Logo do Campeonato (URL)</Label>
-                                            <Input {...form.register("bannerConfig.championshipLogoUrl")} placeholder="https://..." />
-                                        </div>
-                                        <div className="grid gap-2 col-span-2">
-                                            <Label>Background (URL)</Label>
-                                            <Input {...form.register("bannerConfig.backgroundUrl")} placeholder="https://..." />
-                                        </div>
+                                    <div className="pt-4">
+                                        <BannerConfigForm
+                                            config={{
+                                                active: true,
+                                                titleColor: "#FFFFFF",
+                                                subtitleColor: "#FBBF24",
+                                                namesColor: "#FFFFFF",
+                                                displayMode: "photo_and_names",
+                                                layoutStyle: "modern",
+                                                ...form.watch("bannerConfig")
+                                            }}
+                                            onChange={(newConfig) => form.setValue("bannerConfig", newConfig as any, { shouldDirty: true })}
+                                            hasTies={hasTies}
+                                        />
                                     </div>
 
                                     {/* SECTION: MANUAL OVERRIDE (DEDO DE DEUS) */}
@@ -645,6 +623,6 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
                     )}
                 </Button>
             </div>
-        </form>
+        </form >
     );
 }

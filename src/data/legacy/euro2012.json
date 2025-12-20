@@ -1,0 +1,98 @@
+[
+    {
+        "year": 2012,
+        "championshipName": "Eurocopa 2012",
+        "legacyUserName": "Adriano",
+        "points": 26,
+        "exactScores": 6,
+        "rank": 1,
+        "championPick": "França",
+        "achievements": [
+            "champion_points"
+        ]
+    },
+    {
+        "year": 2012,
+        "championshipName": "Eurocopa 2012",
+        "legacyUserName": "Jullius",
+        "points": 25,
+        "exactScores": 3,
+        "rank": 2,
+        "championPick": "Inglaterra",
+        "achievements": []
+    },
+    {
+        "year": 2012,
+        "championshipName": "Eurocopa 2012",
+        "legacyUserName": "Alan",
+        "points": 23,
+        "exactScores": 5,
+        "rank": 3,
+        "championPick": "Alemanha",
+        "achievements": []
+    },
+    {
+        "year": 2012,
+        "championshipName": "Eurocopa 2012",
+        "legacyUserName": "Elisson",
+        "points": 23,
+        "exactScores": 2,
+        "rank": 4,
+        "championPick": "Espanha",
+        "achievements": [
+            "champion_team_pick"
+        ]
+    },
+    {
+        "year": 2012,
+        "championshipName": "Eurocopa 2012",
+        "legacyUserName": "Anderson",
+        "points": 22,
+        "exactScores": 4,
+        "rank": 5,
+        "championPick": "Espanha",
+        "achievements": [
+            "champion_team_pick"
+        ]
+    },
+    {
+        "year": 2012,
+        "championshipName": "Eurocopa 2012",
+        "legacyUserName": "Daniel",
+        "points": 22,
+        "exactScores": 4,
+        "rank": 6,
+        "championPick": "Alemanha",
+        "achievements": []
+    },
+    {
+        "year": 2012,
+        "championshipName": "Eurocopa 2012",
+        "legacyUserName": "Lindoaldo",
+        "points": 20,
+        "exactScores": 2,
+        "rank": 7,
+        "championPick": "Holanda",
+        "achievements": []
+    },
+    {
+        "year": 2012,
+        "championshipName": "Eurocopa 2012",
+        "legacyUserName": "Josenildo",
+        "points": 17,
+        "exactScores": 2,
+        "rank": 8,
+        "championPick": "Holanda",
+        "achievements": []
+    },
+    {
+        "year": 2012,
+        "championshipName": "Eurocopa 2012",
+        "legacyUserName": "Marlon",
+        "points": 15,
+        "exactScores": 2,
+        "rank": 9,
+        "championPick": "Alemanha",
+        "achievements": []
+    }
+]

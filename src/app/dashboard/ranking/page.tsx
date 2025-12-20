@@ -1,15 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { collection, getDocs, query, orderBy, limit, where, documentId } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Trophy, Medal, Crown, Lightbulb, Siren, Flame } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { collection, query, getDocs, where, documentId } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { Crown, Medal, Trophy, Siren, Flame } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { getFlagUrl } from "@/lib/utils";
 
 interface UserProfile {
     id: string;
@@ -18,6 +21,11 @@ interface UserProfile {
     fotoPerfil?: string;
     totalPoints?: number;
     championshipPoints?: number; // Calculated dynamically
+    teamPicks?: string[]; // Legacy Team Picks
+    championPick?: string; // Legacy Champion Pick
+    exactScores?: number;
+    outcomes?: number;
+    errors?: number;
 }
 
 interface Championship {
@@ -25,6 +33,8 @@ interface Championship {
     name: string;
     status: string;
     createdAt: any;
+    legacyImport?: boolean; // Added flag
+    category?: string;
 }
 
 export default function RankingPage() {
@@ -36,16 +46,17 @@ export default function RankingPage() {
     const [loading, setLoading] = useState(true);
     const [championships, setChampionships] = useState<Championship[]>([]);
     const [selectedChampionship, setSelectedChampionship] = useState<string>(initialChampionshipId);
+    const [sortBy, setSortBy] = useState<'totalPoints' | 'exactScores' | 'outcomes'>('totalPoints');
 
     useEffect(() => {
         fetchChampionships();
     }, []);
 
     useEffect(() => {
-        if (selectedChampionship !== "all") {
+        if (selectedChampionship) {
             fetchRanking();
         }
-    }, [selectedChampionship]);
+    }, [selectedChampionship, championships]);
 
     const fetchChampionships = async () => {
         try {
@@ -86,46 +97,78 @@ export default function RankingPage() {
         setLoading(true);
         try {
             let rankedUsers: UserProfile[] = [];
+            const currentChamp = championships.find(c => c.id === selectedChampionship);
 
-            // Championship Specific Ranking
-            // 1. Get all matches for this championship
-            const matchesQ = query(collection(db, "matches"), where("championshipId", "==", selectedChampionship));
-            const matchesSnap = await getDocs(matchesQ);
-            const matchIds = matchesSnap.docs.map(d => d.id);
+            if (currentChamp?.legacyImport) {
+                // Fetch from legacy_history
+                const q = query(collection(db, "legacy_history"), where("championshipId", "==", selectedChampionship));
+                const snap = await getDocs(q);
 
-            if (matchIds.length > 0) {
-                // 2. Get all predictions for these matches
-                const predictionsRef = collection(db, "predictions");
-                const predsSnapshot = await getDocs(query(predictionsRef));
-                const relevantPreds = predsSnapshot.docs
-                    .map(d => d.data())
-                    .filter(p => matchIds.includes(p.matchId));
-
-                // 3. Aggregate points
-                const userPointsMap = new Map<string, number>();
-                relevantPreds.forEach(p => {
-                    const current = userPointsMap.get(p.userId) || 0;
-                    userPointsMap.set(p.userId, current + (p.points || 0));
+                rankedUsers = snap.docs.map(doc => {
+                    const data = doc.data();
+                    return {
+                        id: data.legacyUserName, // Use name as ID for legacy
+                        nome: data.legacyUserName,
+                        nickname: data.legacyUserName,
+                        totalPoints: data.points,
+                        exactScores: data.exactScores || 0,
+                        outcomes: data.outcomes || 0,
+                        errors: data.errors || 0,
+                        teamPicks: data.teamPicks,
+                        championPick: data.championPick
+                    } as UserProfile;
                 });
 
-                // 4. Fetch User Details for those who have points
-                const userIds = Array.from(userPointsMap.keys());
-                if (userIds.length > 0) {
-                    // Fetch users in batches of 10
-                    const userDocs: any[] = [];
-                    for (let i = 0; i < userIds.length; i += 10) {
-                        const chunk = userIds.slice(i, i + 10);
-                        const usersQ = query(collection(db, "users"), where(documentId(), "in", chunk));
-                        const usersSnap = await getDocs(usersQ);
-                        usersSnap.forEach(d => userDocs.push({ id: d.id, ...d.data() }));
+            } else if (selectedChampionship !== "all") {
+                // EXISTING LOGIC for Standard Championships
+                // 1. Get all matches for this championship
+                const matchesQ = query(collection(db, "matches"), where("championshipId", "==", selectedChampionship));
+                const matchesSnap = await getDocs(matchesQ);
+                const matchIds = matchesSnap.docs.map(d => d.id);
+
+                if (matchIds.length > 0) {
+                    // 2. Get all predictions for these matches
+                    const predictionsRef = collection(db, "predictions");
+                    const predsSnapshot = await getDocs(query(predictionsRef));
+                    const relevantPreds = predsSnapshot.docs
+                        .map(d => d.data())
+                        .filter(p => matchIds.includes(p.matchId));
+
+                    // 3. Aggregate points
+                    const userStatsMap = new Map<string, { total: number, exacts: number, outcomes: number, errors: number }>();
+
+                    relevantPreds.forEach(p => {
+                        const current = userStatsMap.get(p.userId) || { total: 0, exacts: 0, outcomes: 0, errors: 0 };
+                        current.total += (p.points || 0);
+                        if (p.points === 3) current.exacts++;
+                        else if (p.points === 1) current.outcomes++;
+                        else if (p.points === 0) current.errors++;
+                        userStatsMap.set(p.userId, current);
+                    });
+
+                    // 4. Fetch User Details for those who have points
+                    const userIds = Array.from(userStatsMap.keys());
+                    if (userIds.length > 0) {
+                        // Fetch users in batches of 10
+                        const userDocs: any[] = [];
+                        for (let i = 0; i < userIds.length; i += 10) {
+                            const chunk = userIds.slice(i, i + 10);
+                            const usersQ = query(collection(db, "users"), where(documentId(), "in", chunk));
+                            const usersSnap = await getDocs(usersQ);
+                            usersSnap.forEach(d => userDocs.push({ id: d.id, ...d.data() }));
+                        }
+
+                        rankedUsers = userDocs.map(u => {
+                            const stats = userStatsMap.get(u.id);
+                            return {
+                                ...u,
+                                totalPoints: stats?.total || 0,
+                                exactScores: stats?.exacts || 0,
+                                outcomes: stats?.outcomes || 0,
+                                errors: stats?.errors || 0
+                            };
+                        });
                     }
-
-                    rankedUsers = userDocs.map(u => ({
-                        ...u,
-                        totalPoints: userPointsMap.get(u.id) || 0 // Override totalPoints with championship points for display
-                    }));
-
-                    rankedUsers.sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
                 }
             }
 
@@ -142,9 +185,6 @@ export default function RankingPage() {
         if (index === 0) return (
             <div className="relative">
                 <Crown className="h-8 w-8 text-yellow-500 animate-bounce" />
-                <div className="absolute -top-1 -right-1">
-                    <Flame className="h-4 w-4 text-orange-500 animate-pulse" />
-                </div>
             </div>
         );
 
@@ -163,71 +203,183 @@ export default function RankingPage() {
         return <span className="text-lg font-bold text-muted-foreground w-6 text-center">{index + 1}</span>;
     };
 
+
+
+    const sortedUsers = [...users].sort((a, b) => {
+        // Tiebreaker: Total Points always secondary
+        if (sortBy !== 'totalPoints') {
+            // Otherwise, MORE is better (Descending)
+            const valA = a[sortBy] || 0;
+            const valB = b[sortBy] || 0;
+            if (valA !== valB) return valB - valA;
+        }
+        return (b.totalPoints || 0) - (a.totalPoints || 0);
+    });
+
+    const isLegacy = championships.find(c => c.id === selectedChampionship)?.legacyImport;
+
     return (
         <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col gap-4">
                 <h1 className="text-3xl font-bold tracking-tight">Ranking</h1>
 
-                <div className="w-full md:w-[250px]">
-                    <Select value={selectedChampionship} onValueChange={setSelectedChampionship}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Selecione um Campeonato" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {championships.map(c => (
-                                <SelectItem key={c.id} value={c.id}>
-                                    {c.name} {c.status === 'ativo' && '(Ativo)'}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="w-full sm:w-[250px]">
+                        <Select value={selectedChampionship} onValueChange={setSelectedChampionship}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Selecione um Campeonato" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {championships.map(c => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                        {c.name} {c.status === 'ativo' && '(Ativo)'}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="w-full sm:w-[180px]">
+                        <Select value={sortBy} onValueChange={(val: any) => setSortBy(val)}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Ordenar por" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="totalPoints">Total de Pontos</SelectItem>
+                                <SelectItem value="exactScores">Buchas (3 pts)</SelectItem>
+                                <SelectItem value="outcomes">Situações (1 pt)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
             </div>
 
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
-                        <span>Classificação</span>
-                        {selectedChampionship !== 'all' && <span className="text-sm font-normal text-muted-foreground">Pontos neste campeonato</span>}
-                    </CardTitle>
+                    {/* Header Row */}
+                    <div className="flex items-center text-sm font-medium text-muted-foreground px-4 gap-2">
+                        <div className="w-8 text-center shrink-0">Pos.</div>
+                        <div className="flex-1 pl-2">Jogador</div>
+
+                        {/* Desktop Stats Headers: Points First */}
+                        <div className="w-16 text-center text-primary font-bold shrink-0">Pontos</div>
+                        <div className="hidden sm:block w-16 text-center text-primary font-bold shrink-0">Buchas</div>
+                        <div className="hidden sm:block w-16 text-center text-primary font-bold shrink-0">Situação</div>
+
+                        {/* Mobile Stats Header (Dynamic) */}
+                        {sortBy === 'exactScores' && <div className="sm:hidden w-8 text-center text-primary font-bold shrink-0">Buchas</div>}
+                        {sortBy === 'outcomes' && <div className="sm:hidden w-8 text-center text-primary font-bold shrink-0">Situação</div>}
+                    </div>
                 </CardHeader>
                 <CardContent className="p-0">
                     <div className="divide-y">
-                        {users.map((user, index) => {
+                        {sortedUsers.map((user, index) => {
                             const isCurrentUser = currentUser?.uid === user.id;
-                            const isLast = index === users.length - 1 && users.length > 3;
+                            const isLast = index === sortedUsers.length - 1 && sortedUsers.length > 3;
 
                             return (
                                 <div
                                     key={user.id}
-                                    className={`flex items-center p-4 transition-all duration-300 
+                                    className={`flex items-center px-4 py-3 gap-2 transition-all duration-300 
                                         ${isCurrentUser ? "bg-primary/10 hover:bg-primary/15 border-l-4 border-primary" : "hover:bg-muted/50"}
                                         ${index === 0 ? "bg-yellow-50/50 dark:bg-yellow-900/10" : ""}
                                         ${isLast ? "bg-red-50/50 dark:bg-red-900/10" : ""}
                                     `}
                                 >
-                                    <div className="mr-4 flex-shrink-0 w-10 flex justify-center">
-                                        {getRankIcon(index, users.length)}
+                                    {/* Position Number */}
+                                    <div className="w-8 flex justify-center text-sm font-bold text-muted-foreground shrink-0">
+                                        {index + 1}
                                     </div>
-                                    <Avatar className={`h-10 w-10 mr-4 border-2 ${index === 0 ? "border-yellow-500 shadow-lg shadow-yellow-500/20" : "border-primary/10"}`}>
-                                        <AvatarImage src={user.fotoPerfil} />
-                                        <AvatarFallback>{user.nome?.substring(0, 2).toUpperCase()}</AvatarFallback>
-                                    </Avatar>
-                                    <div className="flex-1 min-w-0">
-                                        <Link href={`/dashboard/profile/${user.id}`} className="hover:underline cursor-pointer">
-                                            <p className="text-sm font-medium truncate leading-none flex items-center gap-2">
-                                                {user.nickname || user.nome}
-                                                {isCurrentUser && <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full font-bold">VOCÊ</span>}
-                                                {index === 0 && <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-bold border border-yellow-200">LÍDER</span>}
-                                            </p>
-                                        </Link>
-                                        <p className="text-xs text-muted-foreground truncate mt-1">{user.nome}</p>
-                                    </div>
-                                    <div className="flex flex-col items-end ml-4">
-                                        <div className="font-bold text-lg">
-                                            {user.totalPoints || 0} <span className="text-xs font-normal text-muted-foreground">pts</span>
+
+                                    {/* Player Container (Avatar + Name) - Aligns with 'Jogador' header */}
+                                    <div className="flex-1 flex items-center gap-3 min-w-0">
+                                        <Avatar className={`h-10 w-10 border-2 shrink-0 ${index === 0 ? "border-yellow-500 shadow-lg shadow-yellow-500/20" : "border-primary/10"}`}>
+                                            <AvatarImage src={user.fotoPerfil} />
+                                            <AvatarFallback>{user.nome?.substring(0, 2).toUpperCase()}</AvatarFallback>
+                                        </Avatar>
+
+                                        <div className="flex flex-col justify-center min-w-0">
+                                            <Link href={`/dashboard/profile/${user.id}`} className={`hover:underline cursor-pointer ${isLegacy ? 'pointer-events-none' : ''}`}>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-sm font-medium truncate leading-none">
+                                                        {user.nickname || user.nome}
+                                                    </p>
+                                                    {/* Rank Icon */}
+                                                    <div>{getRankIcon(index, sortedUsers.length)}</div>
+
+                                                    {isCurrentUser && <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full font-bold">VOCÊ</span>}
+                                                </div>
+                                            </Link>
+
+                                            {/* Legacy Flags Display */}
+                                            {isLegacy && user.teamPicks && (
+                                                <div className="mt-1.5">
+                                                    {/* Desktop: Row of flags */}
+                                                    <div className="hidden sm:flex items-center gap-2">
+                                                        {user.teamPicks.map((pick, i) => {
+                                                            const isChampion = pick === "Espanha" && i === 0;
+                                                            return (
+                                                                <div key={i} className="relative group" title={`${i + 1}º Palpite: ${pick}`}>
+                                                                    <img
+                                                                        src={getFlagUrl(pick)}
+                                                                        alt={pick}
+                                                                        className={`w-5 h-3.5 object-cover rounded-sm shadow-sm transition-all duration-300 ${isChampion ? 'ring-1 ring-yellow-400 scale-110 opacity-100' : 'opacity-40 hover:opacity-100 grayscale hover:grayscale-0'}`}
+                                                                    />
+                                                                    {isChampion && <span className="absolute -top-1.5 -right-1.5 text-[6px]">🏆</span>}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+
+                                                    {/* Mobile: Trophy Popover */}
+                                                    <div className="sm:hidden flex items-center">
+                                                        <Popover>
+                                                            <PopoverTrigger asChild>
+                                                                <div className="cursor-pointer p-1 -ml-1 hover:bg-muted rounded-full transition-colors flex items-center gap-1 group">
+                                                                    <Trophy className="h-4 w-4 text-yellow-600/80 group-hover:text-yellow-600" />
+                                                                    <span className="text-[10px] text-muted-foreground group-hover:text-foreground">Ver Palpites</span>
+                                                                </div>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-64 p-3" align="start">
+                                                                <div className="space-y-2">
+                                                                    <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider mb-2">Seleções Escolhidas</h4>
+                                                                    {user.teamPicks.map((pick, i) => {
+                                                                        const isChampion = pick === "Espanha" && i === 0;
+                                                                        return (
+                                                                            <div key={i} className={`flex items-center gap-3 p-2 rounded-md ${isChampion ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800' : 'bg-muted/30'}`}>
+                                                                                <div className="font-bold text-xs w-4 text-muted-foreground">{i + 1}º</div>
+                                                                                <img src={getFlagUrl(pick)} alt={pick} className="w-6 h-4 object-cover rounded shadow-sm" />
+                                                                                <span className={`text-sm font-medium ${isChampion ? 'text-yellow-700 dark:text-yellow-500' : ''}`}>{pick}</span>
+                                                                                {isChampion && <span className="ml-auto text-xs">🏆</span>}
+                                                                            </div>
+                                                                        )
+                                                                    })}
+                                                                </div>
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {!isLegacy && (
+                                                <p className="text-xs text-muted-foreground truncate mt-1">{user.nome}</p>
+                                            )}
                                         </div>
                                     </div>
+
+                                    {/* Pontos Column (Now First) */}
+                                    <div className="w-16 text-center shrink-0">
+                                        <div className="font-bold text-lg text-primary">
+                                            {user.totalPoints || 0}
+                                        </div>
+                                    </div>
+
+                                    {/* Desktop Stats Columns */}
+                                    <div className="hidden sm:block w-16 text-center text-sm font-medium text-muted-foreground shrink-0">{user.exactScores}</div>
+                                    <div className="hidden sm:block w-16 text-center text-sm font-medium text-muted-foreground shrink-0">{user.outcomes}</div>
+
+                                    {/* Mobile Stats (Dynamic) */}
+                                    {sortBy === 'exactScores' && <div className="sm:hidden w-8 text-center text-sm font-medium text-muted-foreground shrink-0">{user.exactScores}</div>}
+                                    {sortBy === 'outcomes' && <div className="sm:hidden w-8 text-center text-sm font-medium text-muted-foreground shrink-0">{user.outcomes}</div>}
                                 </div>
                             );
                         })}
