@@ -10,6 +10,7 @@ import { format } from "date-fns";
 import { BannerConfigForm } from "@/components/banner/BannerConfigForm";
 import { ChampionBanner } from "@/components/banner/ChampionBanner";
 import { BannerConfig, BannerWinner } from "@/types/banner";
+import { useAdminUpdate } from "@/contexts/AdminUpdateContext";
 
 export function UpdateDebugger() {
     const [loading, setLoading] = useState(true);
@@ -141,179 +142,18 @@ export function UpdateDebugger() {
     }, [championshipsMap]);
 
 
-    // 2. Update Logic (Copied from DashboardClient)
+    // 2. Update Logic (From Context)
+    const { isUpdating, logs, runUpdate } = useAdminUpdate();
+
+    // Sync context logs to local logs for display
+    useEffect(() => {
+        setDebugLogs(logs);
+    }, [logs]);
+
     const handleUpdateScores = async () => {
-        setUpdating(true);
-        setDebugLogs([]);
-        const addLog = (msg: string) => setDebugLogs(prev => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
-
-        try {
-            addLog("Iniciando atualização...");
-            const currentActiveMatches = activeMatchesRef.current;
-
-            let dateFromStr = "";
-            let dateToStr = "";
-
-            if (currentActiveMatches.length > 0) {
-                const oldestMatchDate = currentActiveMatches.reduce((min, match) => {
-                    const d = match.date.toDate();
-                    return d < min ? d : min;
-                }, new Date());
-
-                const safeFromDate = new Date(oldestMatchDate);
-                safeFromDate.setDate(safeFromDate.getDate() - 1);
-
-                dateFromStr = `&dateFrom=${format(safeFromDate, 'yyyy-MM-dd')}`;
-                dateToStr = `&dateTo=${format(new Date(), 'yyyy-MM-dd')}`;
-            }
-
-            const currentChamps = championshipsMapRef.current;
-            const competitionCodes = Object.values(currentChamps)
-                .map(c => c.apiCode || c.externalId)
-                .filter(code => code && typeof code === 'string' && code.length < 5);
-
-            const uniqueCodes = Array.from(new Set(competitionCodes));
-            let apiMatches: any[] = [];
-
-            if (uniqueCodes.length > 0) {
-                addLog(`Buscando por Ligas: ${uniqueCodes.join(', ')}`);
-                const promises = uniqueCodes.map(async (code) => {
-                    const url = `/api/football-data/matches?code=${code}&status=IN_PLAY,PAUSED,FINISHED${dateFromStr}${dateToStr}`;
-                    try {
-                        const res = await fetch(url);
-                        if (!res.ok) {
-                            addLog(`Erro Liga ${code}: ${res.statusText}`);
-                            return [];
-                        }
-                        const data = await res.json();
-                        return data.matches || [];
-                    } catch (err) {
-                        addLog(`Erro Liga ${code}: ${err}`);
-                        return [];
-                    }
-                });
-                const results = await Promise.all(promises);
-                apiMatches = results.flat();
-            } else {
-                addLog(`Sem códigos de liga, buscando global...`);
-                const apiUrl = `/api/football-data/matches?status=IN_PLAY,PAUSED,FINISHED${dateFromStr}${dateToStr}`;
-                const res = await fetch(apiUrl);
-                if (!res.ok) throw new Error("Failed to fetch live matches");
-                const data = await res.json();
-                apiMatches = data.matches || [];
-            }
-
-            addLog(`Total Jogos encontrados na API: ${apiMatches.length}`);
-
-            if (apiMatches.length === 0) {
-                if (!autoUpdate) alert("Nenhum jogo ao vivo ou finalizado recentemente na API.");
-                setUpdating(false);
-                return;
-            }
-
-            let updatesCount = 0;
-            const batch = writeBatch(db);
-            const apiMatchesMap = new Map(apiMatches.map((m: any) => [m.id, m]));
-
-            // Helper to check and update match
-            const updateMatchIfChanged = (localMatch: any, apiMatch: any, scorePriority: 'regular' | 'full' = 'regular') => {
-                let changed = false;
-                let newStatus = 'scheduled';
-                const liveStatuses = ['IN_PLAY', 'PAUSED', 'EXTRA_TIME', 'PENALTY_SHOOTOUT'];
-                const finishedStatuses = ['FINISHED', 'AWARDED', 'CANCELLED', 'POSTPONED', 'SUSPENDED'];
-
-                if (liveStatuses.includes(apiMatch.status)) newStatus = 'live';
-                if (finishedStatuses.includes(apiMatch.status)) newStatus = 'finished';
-
-                let apiHomeScore = 0;
-                let apiAwayScore = 0;
-
-                addLog(`RAW SCORE [${localMatch.homeTeamName}]: ${JSON.stringify(apiMatch.score)}`);
-
-                if (liveStatuses.includes(apiMatch.status)) {
-                    apiHomeScore = apiMatch.score.fullTime?.home ?? 0;
-                    apiAwayScore = apiMatch.score.fullTime?.away ?? 0;
-                } else {
-                    if (apiMatch.score.duration === 'REGULAR') {
-                        apiHomeScore = apiMatch.score.fullTime?.home ?? 0;
-                        apiAwayScore = apiMatch.score.fullTime?.away ?? 0;
-                    } else if (scorePriority === 'regular') {
-                        apiHomeScore = apiMatch.score.regularTime?.home ?? apiMatch.score.fullTime?.home ?? 0;
-                        apiAwayScore = apiMatch.score.regularTime?.away ?? apiMatch.score.fullTime?.away ?? 0;
-                    } else {
-                        apiHomeScore = apiMatch.score.fullTime?.home ?? 0;
-                        apiAwayScore = apiMatch.score.fullTime?.away ?? 0;
-                    }
-                }
-
-                const logMsg = `[${localMatch.homeTeamName}] API: ${apiMatch.status} -> Resolved: ${apiHomeScore}x${apiAwayScore}`;
-                addLog(logMsg);
-
-                if (localMatch.homeScore !== apiHomeScore ||
-                    localMatch.awayScore !== apiAwayScore ||
-                    localMatch.status !== newStatus) {
-
-                    addLog(`>>> ATUALIZANDO: ${localMatch.homeTeamName}`);
-                    const matchRef = doc(db, "matches", localMatch.id);
-                    batch.update(matchRef, {
-                        homeScore: apiHomeScore,
-                        awayScore: apiAwayScore,
-                        status: newStatus,
-                        lastUpdated: serverTimestamp()
-                    });
-                    changed = true;
-                }
-                return changed;
-            };
-
-            let scorePriority: 'regular' | 'full' = 'regular';
-            try {
-                const settingsSnap = await getDoc(doc(db, "system_settings", "config"));
-                if (settingsSnap.exists()) {
-                    scorePriority = settingsSnap.data().scorePriority || 'regular';
-                }
-            } catch (e) {
-                console.error("Error fetching settings priority", e);
-            }
-
-            for (const localMatch of currentActiveMatches) {
-                let apiMatch = apiMatchesMap.get(localMatch.apiId || localMatch.externalId);
-
-                if (!apiMatch) {
-                    apiMatch = apiMatches.find((m: any) =>
-                        m.homeTeam.name === localMatch.homeTeamName &&
-                        m.awayTeam.name === localMatch.awayTeamName
-                    );
-                    if (apiMatch) {
-                        addLog(`SMART LINK: Vinculado ${localMatch.homeTeamName} ao ID ${(apiMatch as any).id}`);
-                        const matchRef = doc(db, "matches", localMatch.id);
-                        batch.update(matchRef, { apiId: (apiMatch as any).id });
-                    }
-                }
-
-                if (apiMatch) {
-                    if (updateMatchIfChanged(localMatch, apiMatch, scorePriority)) {
-                        updatesCount++;
-                    }
-                } else if (localMatch.status !== 'scheduled') {
-                    addLog(`SEM DADOS NA API: ${localMatch.homeTeamName} x ${localMatch.awayTeamName}`);
-                }
-            }
-
-            if (updatesCount > 0) {
-                await batch.commit();
-                if (!autoUpdate) alert(`${updatesCount} partidas atualizadas!`);
-            } else {
-                if (!autoUpdate) alert("Tudo atualizado! Nenhuma mudança.");
-            }
-
-        } catch (error) {
-            console.error("Error updating scores:", error);
-            addLog(`ERRO CRÍTICO: ${error}`);
-            if (!autoUpdate) alert("Erro ao atualizar placares.");
-        } finally {
-            setUpdating(false);
-        }
+        setUpdating(true); // Local visual loading state if needed, though context has isUpdating
+        await runUpdate();
+        setUpdating(false);
     };
 
     return (

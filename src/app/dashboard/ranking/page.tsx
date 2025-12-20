@@ -195,8 +195,7 @@ export default function RankingPage() {
         // Last Place (Lantern)
         if (index === totalUsers - 1 && totalUsers > 3) return (
             <div className="relative" title="Lanterna">
-                <Siren className="h-8 w-8 text-red-600 animate-pulse" />
-                <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[8px] font-bold bg-red-100 text-red-800 px-1 rounded">LANTERNA</span>
+                <Siren className="h-8 w-8 text-red-600 animate-[pulse_0.4s_ease-in-out_infinite]" />
             </div>
         );
 
@@ -255,11 +254,11 @@ export default function RankingPage() {
             </div>
 
             <Card>
-                <CardHeader>
+                <CardHeader className="p-0 block border-b border-white/5 bg-muted/5">
                     {/* Header Row */}
-                    <div className="flex items-center text-sm font-medium text-muted-foreground px-4 gap-2">
+                    <div className="flex items-center text-sm font-medium text-muted-foreground px-4 py-3 gap-2">
                         <div className="w-8 text-center shrink-0">Pos.</div>
-                        <div className="flex-1 pl-2">Jogador</div>
+                        <div className="flex-1">Jogador</div>
 
                         {/* Desktop Stats Headers: Points First */}
                         <div className="w-16 text-center text-primary font-bold shrink-0">Pontos</div>
@@ -346,7 +345,7 @@ export default function RankingPage() {
                                                                     {user.teamPicks.map((pick, i) => {
                                                                         const isChampion = pick === "Espanha" && i === 0;
                                                                         return (
-                                                                            <div key={i} className={`flex items-center gap-3 p-2 rounded-md ${isChampion ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800' : 'bg-muted/30'}`}>
+                                                                            <div key={i} className={`flex items-center gap-3 p-2 rounded-md transition-all duration-300 ${isChampion ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800' : 'bg-muted/30 opacity-60 grayscale'}`}>
                                                                                 <div className="font-bold text-xs w-4 text-muted-foreground">{i + 1}º</div>
                                                                                 <img src={getFlagUrl(pick)} alt={pick} className="w-6 h-4 object-cover rounded shadow-sm" />
                                                                                 <span className={`text-sm font-medium ${isChampion ? 'text-yellow-700 dark:text-yellow-500' : ''}`}>{pick}</span>
