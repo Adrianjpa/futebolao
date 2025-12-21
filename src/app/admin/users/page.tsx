@@ -1,70 +1,94 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, getDocs, doc, updateDoc, query, orderBy, deleteDoc } from "firebase/firestore";
+import Link from "next/link";
+import { collection, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, Edit, Trash2, AlertTriangle, Calendar } from "lucide-react";
+import { Loader2, Trash2, Search, Filter, MoreVertical, Shield, ShieldAlert, UserCheck } from "lucide-react";
 import { format } from "date-fns";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 interface User {
     id: string;
-    nome: string;
+    nome?: string;
+    displayName?: string;
     email: string;
     funcao: "admin" | "moderator" | "usuario";
-    status: "ativo" | "bloqueado" | "pendente";
+    status: "ativo" | "bloqueado" | "pendente" | "inativo";
     totalPoints: number;
     fotoPerfil?: string;
-    createdAt?: Date;
+    photoURL?: string;
+    createdAt?: any;
+    isGhost?: boolean;
 }
 
 export default function AdminUsersPage() {
     const [users, setUsers] = useState<User[]>([]);
+    const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [statusFilter, setStatusFilter] = useState<string>("all");
 
-    // Edit Points State (Kept in logic but hidden from UI as requested)
-    const [editingPointsUser, setEditingPointsUser] = useState<User | null>(null);
-    const [newPoints, setNewPoints] = useState("");
-    const [isEditPointsOpen, setIsEditPointsOpen] = useState(false);
-    const [savingPoints, setSavingPoints] = useState(false);
-
-    // Delete User State
-    const [deletingUser, setDeletingUser] = useState<User | null>(null);
+    // Delete State
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+    const [userToDelete, setUserToDelete] = useState<User | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         fetchUsers();
     }, []);
 
+    useEffect(() => {
+        let result = users;
+
+        // Filter by Status
+        if (statusFilter !== "all") {
+            result = result.filter(u => u.status === statusFilter);
+        }
+
+        // Filter by Search
+        if (searchTerm) {
+            const lowerTerm = searchTerm.toLowerCase();
+            result = result.filter(u =>
+                (u.nome || u.displayName || "").toLowerCase().includes(lowerTerm) ||
+                (u.email || "").toLowerCase().includes(lowerTerm)
+            );
+        }
+
+        // Sort by Name
+        result.sort((a, b) => {
+            const nameA = a.nome || a.displayName || "";
+            const nameB = b.nome || b.displayName || "";
+            return nameA.localeCompare(nameB);
+        });
+
+        setFilteredUsers(result);
+    }, [users, searchTerm, statusFilter]);
+
     const fetchUsers = async () => {
         setLoading(true);
         try {
-            const q = query(collection(db, "users"), orderBy("nome"));
-            const snap = await getDocs(q);
+            // Fetch ALL users (no orderBy to avoid missing index issues or missing fields)
+            const snap = await getDocs(collection(db, "users"));
             const data: User[] = [];
             snap.forEach(doc => {
-                const userData = doc.data();
-                // Ensure createdAt is handled safely (it might be a Timestamp or string or undefined)
-                let createdAt = userData.createdAt;
-                if (createdAt && typeof createdAt.toDate === 'function') {
-                    createdAt = createdAt.toDate();
-                } else if (createdAt && typeof createdAt === 'string') {
-                    createdAt = new Date(createdAt);
-                }
-
+                const d = doc.data();
                 data.push({
                     id: doc.id,
-                    ...userData,
-                    createdAt: createdAt
+                    ...d,
+                    // Normalize data
+                    nome: d.nome || d.displayName || "Sem Nome",
+                    status: d.status || "pendente",
+                    funcao: d.funcao || "usuario",
+                    createdAt: d.createdAt?.toDate ? d.createdAt.toDate() : (d.createdAt ? new Date(d.createdAt) : undefined)
                 } as User);
             });
             setUsers(data);
@@ -78,192 +102,206 @@ export default function AdminUsersPage() {
     const handleRoleChange = async (userId: string, newRole: string) => {
         try {
             await updateDoc(doc(db, "users", userId), { funcao: newRole });
-            setUsers(users.map(u => u.id === userId ? { ...u, funcao: newRole as any } : u));
+            setUsers(prev => prev.map(u => u.id === userId ? { ...u, funcao: newRole as any } : u));
         } catch (error) {
             console.error("Error updating role:", error);
-            alert("Erro ao atualizar função.");
         }
     };
 
     const handleStatusChange = async (userId: string, newStatus: string) => {
         try {
             await updateDoc(doc(db, "users", userId), { status: newStatus });
-            setUsers(users.map(u => u.id === userId ? { ...u, status: newStatus as any } : u));
+            setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: newStatus as any } : u));
         } catch (error) {
             console.error("Error updating status:", error);
-            alert("Erro ao atualizar status.");
         }
     };
 
-    // Logic kept for future use if needed, but not shown in UI
-    const openEditPoints = (user: User) => {
-        setEditingPointsUser(user);
-        setNewPoints(user.totalPoints?.toString() || "0");
-        setIsEditPointsOpen(true);
-    };
-
-    const handleSavePoints = async () => {
-        if (!editingPointsUser) return;
-        setSavingPoints(true);
-        try {
-            const points = parseInt(newPoints);
-            if (isNaN(points)) throw new Error("Pontuação inválida");
-
-            await updateDoc(doc(db, "users", editingPointsUser.id), { totalPoints: points });
-            setUsers(users.map(u => u.id === editingPointsUser.id ? { ...u, totalPoints: points } : u));
-            setIsEditPointsOpen(false);
-        } catch (error) {
-            console.error("Error updating points:", error);
-            alert("Erro ao atualizar pontos.");
-        } finally {
-            setSavingPoints(false);
-        }
-    };
-
-    const openDeleteUser = (user: User) => {
-        setDeletingUser(user);
-        setIsDeleteOpen(true);
-    };
-
-    const handleDeleteUser = async () => {
-        if (!deletingUser) return;
+    const handleDelete = async () => {
+        if (!userToDelete) return;
         setIsDeleting(true);
         try {
-            await deleteDoc(doc(db, "users", deletingUser.id));
-            setUsers(users.filter(u => u.id !== deletingUser.id));
+            await deleteDoc(doc(db, "users", userToDelete.id));
+            setUsers(prev => prev.filter(u => u.id !== userToDelete.id));
             setIsDeleteOpen(false);
         } catch (error) {
-            console.error("Error deleting user:", error);
-            alert("Erro ao excluir usuário.");
+            console.error(error);
         } finally {
             setIsDeleting(false);
         }
     };
 
-    if (loading) {
-        return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>;
-    }
+    if (loading) return <div className="flex h-96 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
     return (
-        <div className="space-y-8 p-6 animate-in fade-in duration-700">
-            <div className="flex items-center justify-between">
+        <div className="space-y-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                    <h1 className="text-4xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">
-                        Usuários
-                    </h1>
-                    <p className="text-muted-foreground mt-2 text-lg">
-                        Gerencie os participantes da plataforma.
-                    </p>
+                    <h1 className="text-3xl font-bold tracking-tight">Gerenciar Usuários</h1>
+                    <p className="text-muted-foreground">Visualize e gerencie todos os membros da plataforma.</p>
                 </div>
-                <Badge variant="outline" className="px-4 py-1 text-sm backdrop-blur-md bg-white/30 border-white/20 shadow-sm">
-                    Total: {users.length}
-                </Badge>
+                <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="px-4 py-1.5 text-sm">
+                        Total: {users.length}
+                    </Badge>
+                </div>
             </div>
 
-            <Card className="border-0 shadow-xl bg-white/40 backdrop-blur-xl ring-1 ring-black/5 overflow-hidden rounded-2xl">
-                <CardHeader className="border-b border-white/10 bg-white/20 pb-4">
-                    <CardTitle className="text-xl font-medium text-gray-800">Lista de Membros</CardTitle>
+            <Card>
+                <CardHeader className="pb-3">
+                    <CardTitle>Membros</CardTitle>
+                    <CardDescription>
+                        Lista completa de usuários registrados.
+                    </CardDescription>
                 </CardHeader>
-                <CardContent className="p-0">
-                    <Table>
-                        <TableHeader className="bg-gray-50/50">
-                            <TableRow className="hover:bg-transparent border-b border-gray-100">
-                                <TableHead className="pl-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Participante</TableHead>
-                                <TableHead className="py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Cadastro</TableHead>
-                                <TableHead className="py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Função</TableHead>
-                                <TableHead className="py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Status</TableHead>
-                                <TableHead className="pr-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Ações</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {users.map((user) => (
-                                <TableRow key={user.id} className="group hover:bg-white/60 transition-colors duration-200 border-b border-gray-50 last:border-0">
-                                    <TableCell className="pl-6 py-4">
-                                        <div className="flex items-center gap-4">
-                                            <Avatar className="h-10 w-10 ring-2 ring-white shadow-md transition-transform group-hover:scale-105">
-                                                <AvatarImage src={user.fotoPerfil} />
-                                                <AvatarFallback className="bg-gradient-to-br from-blue-100 to-purple-100 text-blue-700 font-bold">
-                                                    {user.nome?.substring(0, 2).toUpperCase()}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <div className="flex flex-col">
-                                                <span className="font-semibold text-gray-900 text-base">{user.nome}</span>
-                                                <span className="text-sm text-gray-500 font-light">{user.email}</span>
-                                            </div>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="py-4">
-                                        <div className="flex items-center gap-2 text-gray-600 text-sm">
-                                            <Calendar className="h-4 w-4 text-gray-400" />
-                                            {user.createdAt ? format(user.createdAt, "dd/MM/yyyy") : "-"}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="py-4">
-                                        <Select
-                                            value={user.funcao}
-                                            onValueChange={(val) => handleRoleChange(user.id, val)}
-                                        >
-                                            <SelectTrigger className="w-[140px] h-9 bg-white/50 border-gray-200 focus:ring-2 focus:ring-blue-500/20 rounded-lg shadow-sm transition-all hover:bg-white">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent className="rounded-xl border-gray-100 shadow-lg backdrop-blur-xl bg-white/90">
-                                                <SelectItem value="usuario">Usuário</SelectItem>
-                                                <SelectItem value="moderator">Moderador</SelectItem>
-                                                <SelectItem value="admin">Admin</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </TableCell>
-                                    <TableCell className="py-4">
-                                        <Select
-                                            value={user.status}
-                                            onValueChange={(val) => handleStatusChange(user.id, val)}
-                                        >
-                                            <SelectTrigger className={`w-[140px] h-9 bg-white/50 border-gray-200 focus:ring-2 focus:ring-blue-500/20 rounded-lg shadow-sm transition-all hover:bg-white ${user.status === 'ativo' ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}`}>
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent className="rounded-xl border-gray-100 shadow-lg backdrop-blur-xl bg-white/90">
-                                                <SelectItem value="ativo" className="text-green-600">Ativo</SelectItem>
-                                                <SelectItem value="bloqueado" className="text-red-600">Bloqueado</SelectItem>
-                                                <SelectItem value="pendente" className="text-yellow-600">Pendente</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </TableCell>
-                                    <TableCell className="pr-6 py-4 text-right">
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-9 w-9 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all duration-300"
-                                            onClick={() => openDeleteUser(user)}
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </TableCell>
+                <CardContent>
+                    <div className="mb-4 flex flex-col gap-4 md:flex-row md:items-center">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Buscar por nome ou email..."
+                                className="pl-9"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <SelectTrigger className="w-full md:w-[180px]">
+                                <Filter className="mr-2 h-4 w-4" />
+                                <SelectValue placeholder="Filtrar Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Todos os Status</SelectItem>
+                                <SelectItem value="ativo">Ativo</SelectItem>
+                                <SelectItem value="pendente">Pendente</SelectItem>
+                                <SelectItem value="bloqueado">Bloqueado</SelectItem>
+                                <SelectItem value="inativo">Inativo</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="rounded-md border">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-[300px]">Usuário</TableHead>
+                                    <TableHead>Cadastro</TableHead>
+                                    <TableHead>Função</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead className="text-right">Ações</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredUsers.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="h-24 text-center">
+                                            Nenhum usuário encontrado.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    filteredUsers.map((user) => (
+                                        <TableRow key={user.id}>
+
+
+                                            // ... (existing code)
+
+                                            <TableCell>
+                                                <div className="flex items-center gap-3">
+                                                    <Link href={`/dashboard/profile/${user.id}`}>
+                                                        <Avatar className="cursor-pointer hover:ring-2 hover:ring-primary transition-all">
+                                                            <AvatarImage src={user.fotoPerfil || user.photoURL} />
+                                                            <AvatarFallback>{(user.nome || user.displayName || "U").substring(0, 2).toUpperCase()}</AvatarFallback>
+                                                        </Avatar>
+                                                    </Link>
+                                                    <div className="flex flex-col">
+                                                        <Link href={`/dashboard/profile/${user.id}`} className="font-medium hover:underline hover:text-primary">
+                                                            {user.nome || user.displayName}
+                                                        </Link>
+                                                        <span className="text-xs text-muted-foreground">{user.email}</span>
+                                                    </div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                {user.createdAt ? format(user.createdAt, "dd/MM/yyyy") : "-"}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Select
+                                                    defaultValue={user.funcao}
+                                                    onValueChange={(v) => handleRoleChange(user.id, v)}
+                                                >
+                                                    <SelectTrigger className="h-8 w-[110px] text-xs">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="usuario">Usuário</SelectItem>
+                                                        <SelectItem value="moderator">Moderador</SelectItem>
+                                                        <SelectItem value="admin">Admin</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Select
+                                                    defaultValue={user.status}
+                                                    onValueChange={(v) => handleStatusChange(user.id, v)}
+                                                >
+                                                    <SelectTrigger className={`h-8 w-[110px] text-xs border-none font-medium ${user.status === 'ativo' ? 'bg-green-100/50 text-green-700 hover:bg-green-100' :
+                                                        user.status === 'bloqueado' ? 'bg-red-100/50 text-red-700 hover:bg-red-100' :
+                                                            user.status === 'inativo' ? 'bg-gray-100/50 text-gray-700 hover:bg-gray-100' :
+                                                                'bg-yellow-100/50 text-yellow-700 hover:bg-yellow-100'
+                                                        }`}>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="ativo" className="text-green-600">Ativo</SelectItem>
+                                                        <SelectItem value="pendente" className="text-yellow-600">Pendente</SelectItem>
+                                                        <SelectItem value="bloqueado" className="text-red-600">Bloqueado</SelectItem>
+                                                        <SelectItem value="inativo" className="text-gray-600">Inativo</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" className="h-8 w-8 p-0">
+                                                            <span className="sr-only">Open menu</span>
+                                                            <MoreVertical className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem
+                                                            className="text-red-600 focus:text-red-600"
+                                                            onClick={() => {
+                                                                setUserToDelete(user);
+                                                                setIsDeleteOpen(true);
+                                                            }}
+                                                        >
+                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                            Excluir Usuário
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
                 </CardContent>
             </Card>
 
-            {/* Delete User Dialog - Styled */}
             <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-                <DialogContent className="sm:max-w-[425px] rounded-2xl border-0 shadow-2xl bg-white/90 backdrop-blur-xl">
+                <DialogContent>
                     <DialogHeader>
-                        <DialogTitle className="text-xl font-bold text-gray-900">Excluir Usuário</DialogTitle>
-                        <DialogDescription className="text-gray-500 text-base mt-2">
-                            Tem certeza que deseja excluir <strong>{deletingUser?.nome}</strong>?
-                            <div className="mt-4 p-3 bg-red-50 rounded-xl border border-red-100 flex items-start gap-3">
-                                <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
-                                <span className="text-sm text-red-700 font-medium">
-                                    Esta ação é irreversível e removerá o usuário do banco de dados.
-                                </span>
-                            </div>
+                        <DialogTitle>Excluir Usuário</DialogTitle>
+                        <DialogDescription>
+                            Tem certeza que deseja excluir <strong>{userToDelete?.nome || userToDelete?.email}</strong>? Essa ação não pode ser desfeita.
                         </DialogDescription>
                     </DialogHeader>
-                    <DialogFooter className="mt-6 gap-2">
-                        <Button variant="outline" onClick={() => setIsDeleteOpen(false)} className="rounded-xl border-gray-200 hover:bg-gray-50">Cancelar</Button>
-                        <Button variant="destructive" onClick={handleDeleteUser} disabled={isDeleting} className="rounded-xl bg-red-600 hover:bg-red-700 shadow-lg shadow-red-200">
-                            {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Excluir Permanentemente"}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>Cancelar</Button>
+                        <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
+                            {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Excluir"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

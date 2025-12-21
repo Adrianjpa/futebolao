@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import { BannerConfig, BannerWinner } from "@/types/banner";
 import { cn } from "@/lib/utils";
 import { Trophy, Medal, Star } from "lucide-react";
@@ -106,7 +107,7 @@ export function ChampionBanner({ championshipName, config, winners, className, t
                             {/* Champions Names Flow */}
                             <div className="flex flex-wrap justify-center items-center w-full px-[5cqw] text-center leading-none">
                                 {champions.length > 0 ? champions.map((winner, idx) => (
-                                    <span key={idx} className="inline-flex items-center">
+                                    <div key={idx} className="inline-flex items-center hover:opacity-100 transition-opacity cursor-default">
                                         {displayMode === 'photo_and_names' && (
                                             <div className="mr-[1cqw]">
                                                 {renderAvatar(winner.photoUrl, 12, subtitleColor)}
@@ -128,7 +129,7 @@ export function ChampionBanner({ championshipName, config, winners, className, t
                                                 }}
                                             />
                                         )}
-                                    </span>
+                                    </div>
                                 )) : (
                                     <span style={{ color: namesColor, fontSize: "5cqw" }}>A DEFINIR</span>
                                 )}
@@ -142,7 +143,7 @@ export function ChampionBanner({ championshipName, config, winners, className, t
                             </h3>
                             <div className="flex flex-wrap justify-center items-center w-full px-[5cqw] text-center leading-none">
                                 {goldWinners.length > 0 ? goldWinners.map((winner, idx) => (
-                                    <span key={idx} className="inline-flex items-center">
+                                    <div key={idx} className="inline-flex items-center hover:opacity-100 transition-opacity cursor-default">
                                         {displayMode === 'photo_and_names' && (
                                             <div className="mr-[0.8cqw]">
                                                 {renderAvatar(winner.photoUrl, 9, subtitleColor)}
@@ -164,17 +165,20 @@ export function ChampionBanner({ championshipName, config, winners, className, t
                                                 }}
                                             />
                                         )}
-                                    </span>
+                                    </div>
                                 )) : (
                                     <span style={{ color: namesColor, fontSize: "4cqw" }}>EM BREVE</span>
                                 )}
                             </div>
                         </div>
+
                     </div>
 
-                    {/* Simple Footer */}
-                    <div className="mt-auto text-center opacity-70">
-                        <p className="uppercase text-white font-semibold" style={{ fontSize: "1.8cqw" }}>FuteBolão • Hall da Fama</p>
+                    {/* Footer */}
+                    <div className="w-full text-center mt-auto pt-[4cqw] opacity-60">
+                        <p style={{ color: "white", fontSize: "2cqw", letterSpacing: "0.2em" }}>
+                            FUTEBOLÃO • HALL DA FAMA
+                        </p>
                     </div>
                 </div>
             </div>
@@ -228,7 +232,7 @@ export function ChampionBanner({ championshipName, config, winners, className, t
                         {/* Wrapper for multiple winners */}
                         <div className="flex flex-wrap justify-center gap-[2cqw] w-full">
                             {champions.length > 0 ? champions.map((winner, idx) => (
-                                <div key={idx} className="flex flex-col items-center relative group">
+                                <div key={idx} className="flex flex-col items-center relative group hover:scale-105 transition-transform duration-300 cursor-default">
                                     <div className="mb-[2cqw] relative">
                                         {/* Icons Removed as requested */}
                                         {renderAvatar(winner.photoUrl, champions.length > 1 ? 22 : 32, "#EAB308")}
@@ -260,7 +264,7 @@ export function ChampionBanner({ championshipName, config, winners, className, t
                     <div className="flex flex-col items-center justify-start relative w-full">
                         <div className="flex flex-wrap justify-center gap-[2cqw] w-full">
                             {goldWinners.length > 0 ? goldWinners.map((winner, idx) => (
-                                <div key={idx} className="flex flex-col items-center relative group">
+                                <div key={idx} className="flex flex-col items-center relative group hover:scale-105 transition-transform duration-300 cursor-default">
                                     <div className="mb-[2cqw] relative">
                                         {/* Icons Removed as requested */}
                                         {renderAvatar(winner.photoUrl, goldWinners.length > 1 ? 22 : 32, "#F59E0B")}
