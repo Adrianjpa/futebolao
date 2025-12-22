@@ -12,6 +12,7 @@ import { Loader2, Trash2, Search, Filter, MoreVertical, Shield, ShieldAlert, Use
 import { format } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -36,7 +37,9 @@ export default function AdminUsersPage() {
     const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
+
     const [statusFilter, setStatusFilter] = useState<string>("all");
+    const [roleFilter, setRoleFilter] = useState<string>("all");
     const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
 
     // Delete State
@@ -53,6 +56,11 @@ export default function AdminUsersPage() {
         // Filter by Status
         if (statusFilter !== "all") {
             result = result.filter(u => u.status === statusFilter);
+        }
+
+        // Filter by Role
+        if (roleFilter !== "all") {
+            result = result.filter(u => u.funcao === roleFilter);
         }
 
         // Filter by Search
@@ -72,7 +80,7 @@ export default function AdminUsersPage() {
         });
 
         setFilteredUsers(result);
-    }, [users, searchTerm, statusFilter]);
+    }, [users, searchTerm, statusFilter, roleFilter]);
 
     const fetchUsers = async () => {
         setLoading(true);
@@ -207,6 +215,18 @@ export default function AdminUsersPage() {
                                 <SelectItem value="inativo">Inativo</SelectItem>
                             </SelectContent>
                         </Select>
+                        <Select value={roleFilter} onValueChange={setRoleFilter}>
+                            <SelectTrigger className="w-full md:w-[180px]">
+                                <Shield className="mr-2 h-4 w-4" />
+                                <SelectValue placeholder="Filtrar Função" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Todas as Funções</SelectItem>
+                                <SelectItem value="usuario">Usuário</SelectItem>
+                                <SelectItem value="moderator">Moderador</SelectItem>
+                                <SelectItem value="admin">Admin</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     <div className="rounded-md border">
@@ -261,7 +281,19 @@ export default function AdminUsersPage() {
                                                         </div>
                                                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                                             <span className="hidden sm:inline">{user.email}</span>
-                                                            <Mail className="h-3 w-3 sm:hidden" />
+                                                            <Popover>
+                                                                <PopoverTrigger asChild>
+                                                                    <div
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                        className="sm:hidden cursor-pointer p-1 -ml-1 hover:bg-muted rounded-full transition-colors"
+                                                                    >
+                                                                        <Mail className="h-3 w-3" />
+                                                                    </div>
+                                                                </PopoverTrigger>
+                                                                <PopoverContent className="w-auto p-2 text-xs" side="top">
+                                                                    {user.email}
+                                                                </PopoverContent>
+                                                            </Popover>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -301,9 +333,9 @@ export default function AdminUsersPage() {
                                                         }`}>
                                                         <div className="flex items-center gap-1.5">
                                                             <span className={`h-1.5 w-1.5 rounded-full ${user.status === 'ativo' ? 'bg-green-500' :
-                                                                    user.status === 'bloqueado' ? 'bg-red-500' :
-                                                                        user.status === 'inativo' ? 'bg-gray-500' :
-                                                                            'bg-yellow-500'
+                                                                user.status === 'bloqueado' ? 'bg-red-500' :
+                                                                    user.status === 'inativo' ? 'bg-gray-500' :
+                                                                        'bg-yellow-500'
                                                                 }`} />
                                                             <SelectValue />
                                                         </div>
