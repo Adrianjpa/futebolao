@@ -32,6 +32,8 @@ interface User {
     isGhost?: boolean;
 }
 
+const SUPER_ADMIN_EMAILS = ["adrianjpa@gmail.com"];
+
 export default function AdminUsersPage() {
     const [users, setUsers] = useState<User[]>([]);
     const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
@@ -109,6 +111,9 @@ export default function AdminUsersPage() {
     };
 
     const handleRoleChange = async (userId: string, newRole: string) => {
+        const user = users.find(u => u.id === userId);
+        if (user && SUPER_ADMIN_EMAILS.includes(user.email)) return;
+
         try {
             await updateDoc(doc(db, "users", userId), { funcao: newRole });
             setUsers(prev => prev.map(u => u.id === userId ? { ...u, funcao: newRole as any } : u));
@@ -118,6 +123,9 @@ export default function AdminUsersPage() {
     };
 
     const handleStatusChange = async (userId: string, newStatus: string) => {
+        const user = users.find(u => u.id === userId);
+        if (user && SUPER_ADMIN_EMAILS.includes(user.email)) return;
+
         try {
             await updateDoc(doc(db, "users", userId), { status: newStatus });
             setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: newStatus as any } : u));
@@ -127,16 +135,27 @@ export default function AdminUsersPage() {
     };
 
     const toggleUser = (userId: string) => {
+        const user = users.find(u => u.id === userId);
+        if (SUPER_ADMIN_EMAILS.includes(user?.email || "")) return;
+
         setSelectedUsers(prev =>
             prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
         );
     };
 
     const toggleAll = () => {
-        if (selectedUsers.length === filteredUsers.length) {
-            setSelectedUsers([]);
+        const selectableUsers = filteredUsers.filter(u => !SUPER_ADMIN_EMAILS.includes(u.email));
+        const selectableIds = selectableUsers.map(u => u.id);
+
+        const allSelectableSelected = selectableIds.every(id => selectedUsers.includes(id));
+
+        if (allSelectableSelected) {
+            setSelectedUsers(prev => prev.filter(id => !selectableIds.includes(id)));
         } else {
-            setSelectedUsers(filteredUsers.map(u => u.id));
+            setSelectedUsers(prev => {
+                const newSelection = new Set([...prev, ...selectableIds]);
+                return Array.from(newSelection);
+            });
         }
     };
 
@@ -144,10 +163,18 @@ export default function AdminUsersPage() {
         if (selectedUsers.length === 0) return;
         setIsDeleting(true);
         try {
-            const deletePromises = selectedUsers.map(id => deleteDoc(doc(db, "users", id)));
+            // Double check protection
+            const safeToDelete = selectedUsers.filter(id => {
+                const user = users.find(u => u.id === id);
+                return user && !SUPER_ADMIN_EMAILS.includes(user.email);
+            });
+
+            if (safeToDelete.length === 0) return;
+
+            const deletePromises = safeToDelete.map(id => deleteDoc(doc(db, "users", id)));
             await Promise.all(deletePromises);
 
-            setUsers(prev => prev.filter(u => !selectedUsers.includes(u.id)));
+            setUsers(prev => prev.filter(u => !safeToDelete.includes(u.id)));
             setSelectedUsers([]);
             setIsDeleteOpen(false);
         } catch (error) {
@@ -259,6 +286,8 @@ export default function AdminUsersPage() {
                                                 <Checkbox
                                                     checked={selectedUsers.includes(user.id)}
                                                     onCheckedChange={() => toggleUser(user.id)}
+                                                    disabled={SUPER_ADMIN_EMAILS.includes(user.email)}
+                                                    className={SUPER_ADMIN_EMAILS.includes(user.email) ? "opacity-50 cursor-not-allowed" : ""}
                                                 />
                                             </TableCell>
                                             <TableCell>
@@ -305,6 +334,7 @@ export default function AdminUsersPage() {
                                                 <Select
                                                     defaultValue={user.funcao}
                                                     onValueChange={(v) => handleRoleChange(user.id, v)}
+                                                    disabled={SUPER_ADMIN_EMAILS.includes(user.email)}
                                                 >
                                                     <SelectTrigger className="h-8 w-[130px] text-xs">
                                                         <div className="flex items-center gap-2">
@@ -325,6 +355,7 @@ export default function AdminUsersPage() {
                                                 <Select
                                                     defaultValue={user.status}
                                                     onValueChange={(v) => handleStatusChange(user.id, v)}
+                                                    disabled={SUPER_ADMIN_EMAILS.includes(user.email)}
                                                 >
                                                     <SelectTrigger className={`h-8 w-[110px] text-xs border-none font-medium transition-colors ${user.status === 'ativo' ? 'bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/20' :
                                                         user.status === 'bloqueado' ? 'bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20' :
