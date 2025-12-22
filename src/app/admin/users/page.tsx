@@ -8,8 +8,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, Trash2, Search, Filter, MoreVertical, Shield, ShieldAlert, UserCheck } from "lucide-react";
+import { Loader2, Trash2, Search, Filter, MoreVertical, Shield, ShieldAlert, UserCheck, Key, Chrome, Mail, Check } from "lucide-react";
 import { format } from "date-fns";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,10 +37,10 @@ export default function AdminUsersPage() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [statusFilter, setStatusFilter] = useState<string>("all");
+    const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
 
     // Delete State
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-    const [userToDelete, setUserToDelete] = useState<User | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
@@ -117,15 +118,32 @@ export default function AdminUsersPage() {
         }
     };
 
-    const handleDelete = async () => {
-        if (!userToDelete) return;
+    const toggleUser = (userId: string) => {
+        setSelectedUsers(prev =>
+            prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+        );
+    };
+
+    const toggleAll = () => {
+        if (selectedUsers.length === filteredUsers.length) {
+            setSelectedUsers([]);
+        } else {
+            setSelectedUsers(filteredUsers.map(u => u.id));
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedUsers.length === 0) return;
         setIsDeleting(true);
         try {
-            await deleteDoc(doc(db, "users", userToDelete.id));
-            setUsers(prev => prev.filter(u => u.id !== userToDelete.id));
+            const deletePromises = selectedUsers.map(id => deleteDoc(doc(db, "users", id)));
+            await Promise.all(deletePromises);
+
+            setUsers(prev => prev.filter(u => !selectedUsers.includes(u.id)));
+            setSelectedUsers([]);
             setIsDeleteOpen(false);
         } catch (error) {
-            console.error(error);
+            console.error("Error deleting users:", error);
         } finally {
             setIsDeleting(false);
         }
@@ -141,6 +159,17 @@ export default function AdminUsersPage() {
                     <p className="text-muted-foreground">Visualize e gerencie todos os membros da plataforma.</p>
                 </div>
                 <div className="flex items-center gap-2">
+                    {selectedUsers.length > 0 && (
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => setIsDeleteOpen(true)}
+                            className="mr-2 animate-in fade-in"
+                        >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Excluir Selecionados ({selectedUsers.length})
+                        </Button>
+                    )}
                     <Badge variant="secondary" className="px-4 py-1.5 text-sm">
                         Total: {users.length}
                     </Badge>
@@ -184,11 +213,16 @@ export default function AdminUsersPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead className="w-[50px]">
+                                        <Checkbox
+                                            checked={selectedUsers.length === filteredUsers.length && filteredUsers.length > 0}
+                                            onCheckedChange={toggleAll}
+                                        />
+                                    </TableHead>
                                     <TableHead className="w-[300px]">Usuário</TableHead>
                                     <TableHead>Cadastro</TableHead>
                                     <TableHead>Função</TableHead>
                                     <TableHead>Status</TableHead>
-                                    <TableHead className="text-right">Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -200,11 +234,13 @@ export default function AdminUsersPage() {
                                     </TableRow>
                                 ) : (
                                     filteredUsers.map((user) => (
-                                        <TableRow key={user.id}>
-
-
-
-
+                                        <TableRow key={user.id} data-state={selectedUsers.includes(user.id) ? "selected" : undefined}>
+                                            <TableCell>
+                                                <Checkbox
+                                                    checked={selectedUsers.includes(user.id)}
+                                                    onCheckedChange={() => toggleUser(user.id)}
+                                                />
+                                            </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center gap-3">
                                                     <Link href={`/dashboard/profile/${user.id}`}>
@@ -213,11 +249,20 @@ export default function AdminUsersPage() {
                                                             <AvatarFallback>{(user.nome || user.displayName || "U").substring(0, 2).toUpperCase()}</AvatarFallback>
                                                         </Avatar>
                                                     </Link>
-                                                    <div className="flex flex-col">
-                                                        <Link href={`/dashboard/profile/${user.id}`} className="font-medium hover:underline hover:text-primary">
-                                                            {user.nome || user.displayName}
-                                                        </Link>
-                                                        <span className="text-xs text-muted-foreground">{user.email}</span>
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Link href={`/dashboard/profile/${user.id}`} className="font-bold hover:underline hover:text-primary transition-colors">
+                                                                {user.nome || user.displayName}
+                                                            </Link>
+                                                            {/* User Provider Icons */}
+                                                            {/* Assuming default is Email/Key, if provider logic existed we'd split it. Using fixed icons for design as requested. */}
+                                                            <Key className="h-3 w-3 text-muted-foreground" />
+                                                            {/* <Chrome className="h-3 w-3 text-blue-500" />  Example for Google */}
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                                            <span className="hidden sm:inline">{user.email}</span>
+                                                            <Mail className="h-3 w-3 sm:hidden" />
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </TableCell>
@@ -229,8 +274,13 @@ export default function AdminUsersPage() {
                                                     defaultValue={user.funcao}
                                                     onValueChange={(v) => handleRoleChange(user.id, v)}
                                                 >
-                                                    <SelectTrigger className="h-8 w-[110px] text-xs">
-                                                        <SelectValue />
+                                                    <SelectTrigger className="h-8 w-[130px] text-xs">
+                                                        <div className="flex items-center gap-2">
+                                                            {user.funcao === "admin" && <ShieldAlert className="h-3 w-3 text-red-500" />}
+                                                            {user.funcao === "moderator" && <Shield className="h-3 w-3 text-blue-500" />}
+                                                            {user.funcao === "usuario" && <UserCheck className="h-3 w-3 text-green-500" />}
+                                                            <SelectValue />
+                                                        </div>
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         <SelectItem value="usuario">Usuário</SelectItem>
@@ -244,42 +294,27 @@ export default function AdminUsersPage() {
                                                     defaultValue={user.status}
                                                     onValueChange={(v) => handleStatusChange(user.id, v)}
                                                 >
-                                                    <SelectTrigger className={`h-8 w-[110px] text-xs border-none font-medium ${user.status === 'ativo' ? 'bg-green-100/50 text-green-700 hover:bg-green-100' :
-                                                        user.status === 'bloqueado' ? 'bg-red-100/50 text-red-700 hover:bg-red-100' :
-                                                            user.status === 'inativo' ? 'bg-gray-100/50 text-gray-700 hover:bg-gray-100' :
-                                                                'bg-yellow-100/50 text-yellow-700 hover:bg-yellow-100'
+                                                    <SelectTrigger className={`h-8 w-[110px] text-xs border-none font-medium transition-colors ${user.status === 'ativo' ? 'bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/20' :
+                                                        user.status === 'bloqueado' ? 'bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20' :
+                                                            user.status === 'inativo' ? 'bg-gray-500/10 text-gray-600 dark:text-gray-400 hover:bg-gray-500/20' :
+                                                                'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/20'
                                                         }`}>
-                                                        <SelectValue />
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className={`h-1.5 w-1.5 rounded-full ${user.status === 'ativo' ? 'bg-green-500' :
+                                                                    user.status === 'bloqueado' ? 'bg-red-500' :
+                                                                        user.status === 'inativo' ? 'bg-gray-500' :
+                                                                            'bg-yellow-500'
+                                                                }`} />
+                                                            <SelectValue />
+                                                        </div>
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="ativo" className="text-green-600">Ativo</SelectItem>
-                                                        <SelectItem value="pendente" className="text-yellow-600">Pendente</SelectItem>
-                                                        <SelectItem value="bloqueado" className="text-red-600">Bloqueado</SelectItem>
-                                                        <SelectItem value="inativo" className="text-gray-600">Inativo</SelectItem>
+                                                        <SelectItem value="ativo">Ativo</SelectItem>
+                                                        <SelectItem value="pendente">Pendente</SelectItem>
+                                                        <SelectItem value="bloqueado">Bloqueado</SelectItem>
+                                                        <SelectItem value="inativo">Inativo</SelectItem>
                                                     </SelectContent>
                                                 </Select>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" className="h-8 w-8 p-0">
-                                                            <span className="sr-only">Open menu</span>
-                                                            <MoreVertical className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem
-                                                            className="text-red-600 focus:text-red-600"
-                                                            onClick={() => {
-                                                                setUserToDelete(user);
-                                                                setIsDeleteOpen(true);
-                                                            }}
-                                                        >
-                                                            <Trash2 className="mr-2 h-4 w-4" />
-                                                            Excluir Usuário
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -293,14 +328,14 @@ export default function AdminUsersPage() {
             <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Excluir Usuário</DialogTitle>
+                        <DialogTitle>Excluir Usuários</DialogTitle>
                         <DialogDescription>
-                            Tem certeza que deseja excluir <strong>{userToDelete?.nome || userToDelete?.email}</strong>? Essa ação não pode ser desfeita.
+                            Tem certeza que deseja excluir <strong>{selectedUsers.length}</strong> usuário(s)? Essa ação não pode ser desfeita.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>Cancelar</Button>
-                        <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
+                        <Button variant="destructive" onClick={handleBulkDelete} disabled={isDeleting}>
                             {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Excluir"}
                         </Button>
                     </DialogFooter>
