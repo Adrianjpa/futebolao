@@ -12,6 +12,7 @@ interface Championship {
     id: string;
     name: string;
     category?: string;
+    teamMode?: string;
 }
 
 interface Match {
@@ -248,6 +249,7 @@ export default function HistoryClient() {
                         finished
                         showBetButton={false}
                         showChampionshipName={selectedChampionship === 'all'}
+                        teamMode={championships.find(c => c.id === match.championshipId)?.teamMode || "clubes"}
                     />
                 ))}
 

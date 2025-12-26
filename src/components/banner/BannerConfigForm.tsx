@@ -16,7 +16,7 @@ export function BannerConfigForm({ config, onChange, hasTies }: BannerConfigForm
     };
 
     return (
-        <div className="grid grid-cols-2 gap-4 border-t pt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t pt-4">
             <div className="grid gap-2">
                 <Label>Estilo do Banner</Label>
                 <Select
@@ -92,7 +92,7 @@ export function BannerConfigForm({ config, onChange, hasTies }: BannerConfigForm
                     placeholder="https://..."
                 />
             </div>
-            <div className="grid gap-2 col-span-2">
+            <div className="grid gap-2 col-span-1 sm:col-span-2">
                 <Label>Background (URL)</Label>
                 <Input
                     value={config.backgroundUrl || ""}
@@ -102,7 +102,7 @@ export function BannerConfigForm({ config, onChange, hasTies }: BannerConfigForm
             </div>
 
             {/* Background Controls */}
-            <div className="col-span-2 grid grid-cols-3 gap-4 border-t pt-4 mt-2">
+            <div className="col-span-1 sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 border-t pt-4 mt-2">
                 <div className="grid gap-2">
                     <div className="flex justify-between">
                         <Label>Zoom ({config.backgroundScale ?? 100}%)</Label>

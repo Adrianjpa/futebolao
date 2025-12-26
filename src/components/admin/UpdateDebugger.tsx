@@ -11,6 +11,7 @@ import { BannerConfigForm } from "@/components/banner/BannerConfigForm";
 import { ChampionBanner } from "@/components/banner/ChampionBanner";
 import { BannerConfig, BannerWinner } from "@/types/banner";
 import { useAdminUpdate } from "@/contexts/AdminUpdateContext";
+import { getCachedData } from "@/utils/cache";
 
 export function UpdateDebugger() {
     const [loading, setLoading] = useState(true);
@@ -71,11 +72,15 @@ export function UpdateDebugger() {
     // 1. Fetch Static Data & Listeners
     useEffect(() => {
         const fetchChamps = async () => {
-            const champsSnap = await getDocs(collection(db, "championships"));
-            const champMap: Record<string, any> = {};
-            champsSnap.forEach(doc => {
-                champMap[doc.id] = { id: doc.id, ...doc.data() };
-            });
+            const champMap = await getCachedData("championships_map_cache", async () => {
+                const champsSnap = await getDocs(collection(db, "championships"));
+                const map: Record<string, any> = {};
+                champsSnap.forEach(doc => {
+                    map[doc.id] = { id: doc.id, ...doc.data() };
+                });
+                return map;
+            }, 60); // 60 mins cache for debug
+
             setChampionshipsMap(champMap);
             championshipsMapRef.current = champMap;
         };

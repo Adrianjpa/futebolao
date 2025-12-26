@@ -101,13 +101,23 @@ export default function RankingPage() {
 
             if (currentChamp?.legacyImport) {
                 // Fetch from legacy_history
+                // 0. Prefetch all users to resolve names to IDs (Hydration Support)
+                const usersSnap = await getDocs(collection(db, "users"));
+                const nameToIdMap = new Map();
+                usersSnap.forEach(u => {
+                    const d = u.data();
+                    if (d.displayName) nameToIdMap.set(d.displayName, u.id);
+                    if (d.nome) nameToIdMap.set(d.nome, u.id);
+                });
+
                 const q = query(collection(db, "legacy_history"), where("championshipId", "==", selectedChampionship));
                 const snap = await getDocs(q);
 
                 rankedUsers = snap.docs.map(doc => {
                     const data = doc.data();
+                    const realId = nameToIdMap.get(data.legacyUserName) || data.legacyUserName;
                     return {
-                        id: data.legacyUserName, // Use name as ID for legacy
+                        id: realId, // Use REAL ID if found (hydrated), else fallback to name
                         nome: data.legacyUserName,
                         nickname: data.legacyUserName,
                         totalPoints: data.points,
@@ -199,7 +209,8 @@ export default function RankingPage() {
             </div>
         );
 
-        return <span className="text-lg font-bold text-muted-foreground w-6 text-center">{index + 1}</span>;
+        // Remove redundant number for other positions
+        return null;
     };
 
 
@@ -298,7 +309,7 @@ export default function RankingPage() {
                                         </Avatar>
 
                                         <div className="flex flex-col justify-center min-w-0">
-                                            <Link href={`/dashboard/profile/${user.id}`} className={`hover:underline cursor-pointer ${isLegacy ? 'pointer-events-none' : ''}`}>
+                                            <Link href={`/dashboard/profile/${user.id}`} className="hover:underline cursor-pointer">
                                                 <div className="flex items-center gap-2">
                                                     <p className="text-sm font-medium truncate leading-none">
                                                         {user.nickname || user.nome}

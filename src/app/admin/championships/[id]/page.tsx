@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import Link from "next/link";
 import { format } from "date-fns";
+import { getFlagUrl } from "@/lib/utils";
 
 interface Championship {
     id: string;
@@ -22,6 +23,7 @@ interface Championship {
     creationType?: string;
     startDate?: any;
     endDate?: any;
+    teamMode?: string;
 }
 
 export default function ChampionshipDetailsPage() {
@@ -412,14 +414,14 @@ export default function ChampionshipDetailsPage() {
                     <CardTitle>Jogos Importados</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <MatchList championshipId={championship.id} />
+                    <MatchList championshipId={championship.id} teamMode={championship.teamMode} />
                 </CardContent>
             </Card>
         </div>
     );
 }
 
-function MatchList({ championshipId }: { championshipId: string }) {
+function MatchList({ championshipId, teamMode = "clubes" }: { championshipId: string, teamMode?: string }) {
     const [matches, setMatches] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
@@ -444,6 +446,21 @@ function MatchList({ championshipId }: { championshipId: string }) {
     const totalPages = Math.ceil(matches.length / ITEMS_PER_PAGE);
     const paginatedMatches = matches.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
+    const isSelecao = teamMode === "selecoes";
+    const flagContainerClass = isSelecao
+        ? "h-10 w-10 relative flex items-center justify-center rounded-full overflow-hidden shadow-sm border bg-white"
+        : "h-10 w-10 relative flex items-center justify-center bg-muted/20 rounded shadow-sm p-0.5";
+
+    const flagImgClass = isSelecao
+        ? "h-full w-full object-cover"
+        : "max-h-full max-w-full object-contain";
+
+    // Mobile specific (slightly larger for touch)
+    const mobileFlagContainerClass = isSelecao
+        ? "h-10 w-10 relative flex items-center justify-center rounded-full overflow-hidden shadow-sm border bg-white"
+        : "h-10 w-10 relative flex items-center justify-center bg-muted/20 rounded-full shadow-sm p-0.5";
+
+
     return (
         <div className="space-y-4">
             <div className="space-y-2">
@@ -461,13 +478,13 @@ function MatchList({ championshipId }: { championshipId: string }) {
                                 {/* Home Team */}
                                 <Popover>
                                     <PopoverTrigger>
-                                        {match.homeTeamCrest ? (
-                                            <img src={match.homeTeamCrest} alt={match.homeTeamName} className="h-10 w-10 object-contain" />
-                                        ) : (
-                                            <div className="h-10 w-10 bg-muted rounded-full flex items-center justify-center text-xs font-bold">
-                                                {match.homeTeamName.substring(0, 2)}
-                                            </div>
-                                        )}
+                                        <div className={mobileFlagContainerClass}>
+                                            {(match.homeTeamCrest || getFlagUrl(match.homeTeamName)) ? (
+                                                <img src={match.homeTeamCrest || getFlagUrl(match.homeTeamName)} alt={match.homeTeamName} className={flagImgClass} />
+                                            ) : (
+                                                <div className="text-xs font-bold">{match.homeTeamName.substring(0, 2)}</div>
+                                            )}
+                                        </div>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-auto p-2 text-sm font-medium">
                                         {match.homeTeamName}
@@ -482,13 +499,13 @@ function MatchList({ championshipId }: { championshipId: string }) {
                                 {/* Away Team */}
                                 <Popover>
                                     <PopoverTrigger>
-                                        {match.awayTeamCrest ? (
-                                            <img src={match.awayTeamCrest} alt={match.awayTeamName} className="h-10 w-10 object-contain" />
-                                        ) : (
-                                            <div className="h-10 w-10 bg-muted rounded-full flex items-center justify-center text-xs font-bold">
-                                                {match.awayTeamName.substring(0, 2)}
-                                            </div>
-                                        )}
+                                        <div className={mobileFlagContainerClass}>
+                                            {(match.awayTeamCrest || getFlagUrl(match.awayTeamName)) ? (
+                                                <img src={match.awayTeamCrest || getFlagUrl(match.awayTeamName)} alt={match.awayTeamName} className={flagImgClass} />
+                                            ) : (
+                                                <div className="text-xs font-bold">{match.awayTeamName.substring(0, 2)}</div>
+                                            )}
+                                        </div>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-auto p-2 text-sm font-medium">
                                         {match.awayTeamName}
@@ -498,27 +515,47 @@ function MatchList({ championshipId }: { championshipId: string }) {
 
                             {/* Row 3: Date/Time */}
                             <div className="text-xs text-muted-foreground">
-                                {format(match.date.toDate(), "dd/MM HH:mm")}
+                                {match.date.toDate().getFullYear() < new Date().getFullYear()
+                                    ? match.date.toDate().getFullYear()
+                                    : format(match.date.toDate(), "dd/MM HH:mm")
+                                }
                             </div>
                         </div>
 
-                        {/* Desktop Layout (>= sm) - Original */}
+                        {/* Desktop Layout (>= sm) */}
                         <div className="hidden sm:flex items-center justify-between">
                             <div className="flex items-center gap-4 flex-1 justify-start w-full">
-                                <div className="flex items-center gap-2 flex-1 justify-end">
+                                <div className="flex items-center gap-3 flex-1 justify-end">
                                     <span className="font-medium text-right text-base truncate">{match.homeTeamName}</span>
-                                    {match.homeTeamCrest && <img src={match.homeTeamCrest} alt={match.homeTeamName} className="h-8 w-8 object-contain" />}
+                                    <div className={flagContainerClass}>
+                                        {(match.homeTeamCrest || getFlagUrl(match.homeTeamName)) ? (
+                                            <img src={match.homeTeamCrest || getFlagUrl(match.homeTeamName)} alt={match.homeTeamName} className={flagImgClass} />
+                                        ) : (
+                                            <div className="text-[10px] font-bold">{match.homeTeamName.substring(0, 2)}</div>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="font-bold px-2 py-1 bg-muted rounded text-sm min-w-[50px] text-center whitespace-nowrap">
                                     {match.status === "finished" || match.status === "live" ? `${match.homeScore ?? 0} x ${match.awayScore ?? 0}` : "x"}
                                 </div>
-                                <div className="flex items-center gap-2 flex-1 justify-start">
-                                    {match.awayTeamCrest && <img src={match.awayTeamCrest} alt={match.awayTeamName} className="h-8 w-8 object-contain" />}
+                                <div className="flex items-center gap-3 flex-1 justify-start">
+                                    <div className={flagContainerClass}>
+                                        {(match.awayTeamCrest || getFlagUrl(match.awayTeamName)) ? (
+                                            <img src={match.awayTeamCrest || getFlagUrl(match.awayTeamName)} alt={match.awayTeamName} className={flagImgClass} />
+                                        ) : (
+                                            <div className="text-[10px] font-bold">{match.awayTeamName.substring(0, 2)}</div>
+                                        )}
+                                    </div>
                                     <span className="font-medium text-left text-base truncate">{match.awayTeamName}</span>
                                 </div>
                             </div>
                             <div className="ml-4 flex flex-col items-end gap-1 min-w-[100px]">
-                                <div className="text-xs text-muted-foreground">{format(match.date.toDate(), "dd/MM HH:mm")}</div>
+                                <div className="text-xs text-muted-foreground">
+                                    {match.date.toDate().getFullYear() < new Date().getFullYear()
+                                        ? match.date.toDate().getFullYear()
+                                        : format(match.date.toDate(), "dd/MM HH:mm")
+                                    }
+                                </div>
                                 <Badge variant={match.status === "finished" ? "secondary" : match.status === "live" ? "destructive" : "outline"} className="capitalize text-xs">
                                     {match.status === "live" ? "Ao Vivo" : match.status === "finished" ? "Finalizado" : "Agendado"}
                                 </Badge>

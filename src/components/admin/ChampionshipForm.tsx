@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from "react";
-import { Check, ChevronsUpDown, X } from "lucide-react";
+import { Check, ChevronsUpDown, X, Settings, BookOpen, Shield, Users, Trophy, Image as ImageIcon, AlertCircle } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { getDocs, query, collection, where, limit } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -23,6 +23,7 @@ import { ChampionBanner } from "@/components/banner/ChampionBanner";
 import { BannerConfigForm } from "@/components/banner/BannerConfigForm";
 import { BannerConfig, BannerWinner } from "@/types/banner";
 
+// ... (rest of imports/schemas/components until generic component start)
 const formSchema = z.object({
     name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
     iconUrl: z.string().url("URL inválida").optional().or(z.literal("")),
@@ -47,6 +48,10 @@ const formSchema = z.object({
         namesColor: z.string().default("#FFFFFF"),
         displayMode: z.enum(["photo_and_names", "names_only"]).default("photo_and_names"),
         layoutStyle: z.enum(["modern", "classic"]).default("modern"),
+        backgroundScale: z.number().default(100),
+        backgroundPosX: z.number().default(50),
+        backgroundPosY: z.number().default(50),
+        customFontSizeOffset: z.number().default(0),
     }).optional(),
     manualWinners: z.array(z.object({
         userId: z.string(),
@@ -54,9 +59,16 @@ const formSchema = z.object({
         photoUrl: z.string().optional(),
         position: z.enum(['champion', 'gold_winner', 'silver_winner', 'bronze_winner']),
     })).optional(),
+    participants: z.array(z.object({
+        userId: z.string(),
+        displayName: z.string(),
+        photoUrl: z.string().optional(),
+        email: z.string().optional(),
+    })).default([]),
     // API Integration
     creationType: z.enum(["manual", "hybrid", "auto"]),
     apiCode: z.string().optional(),
+    status: z.enum(["rascunho", "ativo", "finished", "arquivado"]).default("rascunho"),
 });
 
 export type ChampionshipFormData = z.infer<typeof formSchema>;
@@ -69,31 +81,53 @@ interface ChampionshipFormProps {
 }
 
 // User Search Component
-function UserSearch({ onSelect }: { onSelect: (user: any) => void }) {
+function UserSearch({ onSelect, disabled }: { onSelect: (user: any) => void; disabled?: boolean }) {
     const [open, setOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [foundUsers, setFoundUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
 
+    // Initial fetch of active users
+    useEffect(() => {
+        if (!open) return;
+        const fetchInitial = async () => {
+            setLoading(true);
+            try {
+                const usersRef = collection(db, "users");
+                // Fetch first 20 users initially - assuming 'active' users are just all users for now
+                // In a real scenario, we might have an 'isActive' flag
+                const q = query(usersRef, limit(20));
+                const snap = await getDocs(q);
+                setFoundUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchInitial();
+    }, [open]);
+
     // Search users in Firestore
     const handleSearch = async (term: string) => {
         setSearchTerm(term);
-        if (term.length < 3) return;
-
+        // If empty, reset to initial list logic (or just don't search if we want to keep previous)
+        // But for "search", we want to query
         setLoading(true);
         try {
-            // Improved Search: Search by simple startAt on displayName (since nickname might be missing)
-            // Note: In production, consider Algolia or a specialized search collection.
             const usersRef = collection(db, "users");
-            // Create two queries to try finding by nickname OR displayName (workaround for no OR in client SDK easily combined)
-            // For this admin tool, searching by displayName is safer.
+            let q;
 
-            const q = query(
-                usersRef,
-                where("displayName", ">=", term),
-                where("displayName", "<=", term + '\uf8ff'),
-                limit(10)
-            );
+            if (term.length < 1) {
+                q = query(usersRef, limit(20));
+            } else {
+                q = query(
+                    usersRef,
+                    where("displayName", ">=", term),
+                    where("displayName", "<=", term + '\uf8ff'),
+                    limit(20)
+                );
+            }
 
             const snap = await getDocs(q);
             setFoundUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -107,17 +141,23 @@ function UserSearch({ onSelect }: { onSelect: (user: any) => void }) {
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-                <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
-                    {"Pesquisar usuário..."}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    className="w-full justify-between"
+                    disabled={disabled}
+                >
+                    {disabled ? "Participantes consolidados (Bloqueado)" : "Pesquisar usuário..."}
+                    {!disabled && <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />}
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[300px] p-0">
                 <Command shouldFilter={false}>
-                    <CommandInput placeholder="Digite o nickname..." value={searchTerm} onValueChange={handleSearch} />
+                    <CommandInput placeholder="Digite o nome..." value={searchTerm} onValueChange={handleSearch} />
                     <CommandList>
                         {loading && <CommandItem disabled>Carregando...</CommandItem>}
-                        <CommandEmpty>Nenhum usuário encontrado.</CommandEmpty>
+                        {!loading && foundUsers.length === 0 && <CommandEmpty>Nenhum usuário encontrado.</CommandEmpty>}
                         <CommandGroup>
                             {foundUsers.map((user) => (
                                 <CommandItem
@@ -128,9 +168,13 @@ function UserSearch({ onSelect }: { onSelect: (user: any) => void }) {
                                     }}
                                 >
                                     <div className="flex items-center gap-2">
-                                        {/* Avatar logic simplified */}
-                                        <span>{user.nickname || user.nome}</span>
-                                        <span className="text-xs text-muted-foreground">({user.email})</span>
+                                        <div className="h-6 w-6 rounded-full bg-slate-200 overflow-hidden flex items-center justify-center text-[10px]">
+                                            {user.photoUrl ? <img src={user.photoUrl} alt={user.displayName} className="h-full w-full object-cover" /> : (user.nickname?.[0] || user.displayName?.[0] || "?")}
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="font-medium text-sm">{user.nickname || user.nome || user.displayName}</span>
+                                            <span className="text-[10px] text-muted-foreground">{user.email}</span>
+                                        </div>
                                     </div>
                                     <Check className={cn("ml-auto h-4 w-4", "hidden")} />
                                 </CommandItem>
@@ -164,10 +208,17 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
                 subtitleColor: "#FBBF24",
                 namesColor: "#FFFFFF",
                 displayMode: "photo_and_names",
+                layoutStyle: "modern",
+                backgroundScale: 100,
+                backgroundPosX: 50,
+                backgroundPosY: 50,
+                customFontSizeOffset: 0,
             },
             manualWinners: initialData?.manualWinners || [],
+            participants: initialData?.participants || [],
             creationType: initialData?.creationType || "manual",
             apiCode: initialData?.apiCode || "",
+            status: initialData?.status || "rascunho",
         } as any,
     });
 
@@ -191,7 +242,31 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
         form.setValue("manualWinners", current.filter(w => !(w.userId === userId && w.position === position)));
     };
 
+    // Helper to add participant
+    const addParticipant = (user: any) => {
+        const current = form.getValues("participants") || [];
+        const uid = user.id || user.uid;
+        if (!uid) return;
+
+        // Prevent duplicates
+        if (current.some(p => p.userId === uid)) return;
+
+        const newParticipant = {
+            userId: uid,
+            displayName: user.nickname || user.nome,
+            photoUrl: user.photoUrl || user.customPhotoUrl || "",
+            email: user.email || ""
+        };
+        form.setValue("participants", [...current, newParticipant]);
+    };
+
+    const removeParticipant = (userId: string) => {
+        const current = form.getValues("participants") || [];
+        form.setValue("participants", current.filter(p => p.userId !== userId));
+    };
+
     const manualWinners = form.watch("manualWinners") || [];
+    const participants = form.watch("participants") || [];
     const bannerLayout = form.watch("bannerConfig.layoutStyle");
 
     // Check for ties to enforce classic layout
@@ -219,13 +294,31 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
     return (
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
             <Tabs defaultValue="general" className="w-full">
-                <TabsList className="grid w-full grid-cols-6">
-                    <TabsTrigger value="general">Gerais</TabsTrigger>
-                    <TabsTrigger value="rules">Regras</TabsTrigger>
-                    <TabsTrigger value="teams">Equipes</TabsTrigger>
-                    <TabsTrigger value="participants">Participantes</TabsTrigger>
-                    <TabsTrigger value="scoring">Pontuação</TabsTrigger>
-                    <TabsTrigger value="banner">Banner</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-6 h-auto p-1 bg-muted/50 rounded-lg">
+                    <TabsTrigger value="general" className="flex flex-col items-center gap-1 sm:flex-row sm:gap-2 text-[10px] sm:text-sm py-2 sm:py-1.5 h-full">
+                        <Settings className="h-4 w-4" />
+                        <span className="hidden sm:inline">Gerais</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="rules" className="flex flex-col items-center gap-1 sm:flex-row sm:gap-2 text-[10px] sm:text-sm py-2 sm:py-1.5 h-full">
+                        <BookOpen className="h-4 w-4" />
+                        <span className="hidden sm:inline">Regras</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="teams" className="flex flex-col items-center gap-1 sm:flex-row sm:gap-2 text-[10px] sm:text-sm py-2 sm:py-1.5 h-full">
+                        <Shield className="h-4 w-4" />
+                        <span className="hidden sm:inline">Equipes</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="participants" className="flex flex-col items-center gap-1 sm:flex-row sm:gap-2 text-[10px] sm:text-sm py-2 sm:py-1.5 h-full">
+                        <Users className="h-4 w-4" />
+                        <span className="hidden sm:inline">Participantes</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="scoring" className="flex flex-col items-center gap-1 sm:flex-row sm:gap-2 text-[10px] sm:text-sm py-2 sm:py-1.5 h-full">
+                        <Trophy className="h-4 w-4" />
+                        <span className="hidden sm:inline">Pontuação</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="banner" className="flex flex-col items-center gap-1 sm:flex-row sm:gap-2 text-[10px] sm:text-sm py-2 sm:py-1.5 h-full">
+                        <ImageIcon className="h-4 w-4" />
+                        <span className="hidden sm:inline">Banner</span>
+                    </TabsTrigger>
                 </TabsList>
 
                 {/* ABA GERAIS */}
@@ -248,7 +341,25 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
                                 {form.formState.errors.iconUrl && <p className="text-sm text-destructive">{form.formState.errors.iconUrl.message}</p>}
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label>Status do Campeonato</Label>
+                                <Select
+                                    onValueChange={(val) => form.setValue("status", val as any)}
+                                    defaultValue={form.watch("status")}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione o status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="rascunho">Rascunho (Não visível)</SelectItem>
+                                        <SelectItem value="ativo">Ativo (Em andamento)</SelectItem>
+                                        <SelectItem value="finished">Finalizado (Encerrado)</SelectItem>
+                                        <SelectItem value="arquivado">Arquivado (Oculto)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="grid gap-2">
                                     <Label>Tipo de Cadastro</Label>
                                     <Select
@@ -275,7 +386,7 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="grid gap-2">
                                     <Label>Data de Início</Label>
                                     <Popover>
@@ -297,6 +408,9 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
                                                 selected={form.watch("startDate")}
                                                 onSelect={(date) => form.setValue("startDate", date as Date)}
                                                 initialFocus
+                                                captionLayout="dropdown"
+                                                fromYear={2000}
+                                                toYear={new Date().getFullYear() + 2}
                                             />
                                         </PopoverContent>
                                     </Popover>
@@ -324,6 +438,9 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
                                                 selected={form.watch("endDate")}
                                                 onSelect={(date) => form.setValue("endDate", date as Date)}
                                                 initialFocus
+                                                captionLayout="dropdown"
+                                                fromYear={2000}
+                                                toYear={new Date().getFullYear() + 2}
                                             />
                                         </PopoverContent>
                                     </Popover>
@@ -331,7 +448,7 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="grid gap-2">
                                     <Label>Tipo do Campeonato</Label>
                                     <Select
@@ -428,15 +545,65 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
                     </Card>
                 </TabsContent>
 
-                {/* ABA PARTICIPANTES (Placeholder) */}
+                {/* ABA PARTICIPANTES */}
                 <TabsContent value="participants">
                     <Card>
                         <CardHeader>
                             <CardTitle>Participantes</CardTitle>
-                            <CardDescription>Convide usuários para o bolão.</CardDescription>
+                            <CardDescription>Gerencie quem está participando deste campeonato.</CardDescription>
                         </CardHeader>
-                        <CardContent>
-                            <p className="text-muted-foreground text-sm">Funcionalidade de convite será implementada na próxima etapa.</p>
+                        <CardContent className="space-y-4">
+                            <div className="flex justify-between items-center bg-muted/40 p-3 rounded-lg border border-border">
+                                <div className="text-sm font-medium">
+                                    Total de Participantes: {participants.length}
+                                </div>
+                                <div className="w-[300px]">
+                                    <UserSearch
+                                        onSelect={addParticipant}
+                                        disabled={form.watch("status") === "ativo" || form.watch("status") === "finished"}
+                                    />
+                                </div>
+                            </div>
+
+                            {(form.watch("status") === "ativo" || form.watch("status") === "finished") && (
+                                <div className="flex items-center gap-2 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 p-3 rounded-md border border-yellow-500/50 text-sm">
+                                    <AlertCircle className="h-4 w-4" />
+                                    <span>
+                                        A lista de participantes está consolidada (Campeonato iniciado ou finalizado).
+                                    </span>
+                                </div>
+                            )}
+
+                            <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                                {participants.map((p, index) => (
+                                    <div key={`${p.userId}-${index}`} className="flex items-center justify-between p-3 rounded-md border border-border bg-muted/20 hover:bg-muted/40 transition-colors">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center overflow-hidden border border-border">
+                                                {p.photoUrl ? <img src={p.photoUrl} alt={p.displayName} className="h-full w-full object-cover" /> : <span className="text-xs text-muted-foreground font-bold">{p.displayName.substring(0, 2).toUpperCase()}</span>}
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-medium text-foreground leading-none mb-0.5">{p.displayName}</span>
+                                                {p.email && <span className="text-[10px] text-muted-foreground">{p.email}</span>}
+                                            </div>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            disabled={form.watch("status") === "ativo" || form.watch("status") === "finished"}
+                                            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            onClick={() => removeParticipant(p.userId)}
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ))}
+                                {participants.length === 0 && (
+                                    <div className="col-span-full py-8 text-center text-muted-foreground border-2 border-dashed rounded-lg bg-slate-50">
+                                        Nenhum participante adicionado ainda.
+                                    </div>
+                                )}
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -448,7 +615,7 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
                             <CardTitle>Sistema de Pontuação</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="grid gap-2">
                                     <Label>Placar Exato (Bucha)</Label>
                                     <Input type="number" {...form.register("exactScorePoints")} />
@@ -537,25 +704,25 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
                                         </div>
 
                                         {/* General Champion Selector */}
-                                        <div className="grid gap-2 p-4 bg-slate-50 border rounded-lg">
-                                            <Label className="text-base font-bold text-yellow-600">🏆 Campeão Geral</Label>
+                                        <div className="grid gap-2 p-4 bg-muted/30 border border-border rounded-lg">
+                                            <Label className="text-base font-bold text-yellow-600 dark:text-yellow-500">🏆 Campeão Geral</Label>
 
                                             {/* List of current champions */}
                                             <div className="space-y-2">
                                                 {form.watch("manualWinners")?.filter(w => w.position === 'champion').map((winner) => (
-                                                    <div key={winner.userId} className="flex items-center justify-between gap-3 bg-white p-2 rounded border">
+                                                    <div key={winner.userId} className="flex items-center justify-between gap-3 bg-card border border-border p-2 rounded shadow-sm">
                                                         <div className="flex items-center gap-2">
-                                                            <div className="h-8 w-8 bg-slate-200 rounded-full overflow-hidden">
+                                                            <div className="h-8 w-8 bg-muted rounded-full overflow-hidden">
                                                                 {winner.photoUrl && <img src={winner.photoUrl} className="h-full w-full object-cover" />}
                                                             </div>
-                                                            <span className="font-medium">{winner.displayName}</span>
+                                                            <span className="font-medium text-foreground">{winner.displayName}</span>
                                                         </div>
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
                                                             type="button"
                                                             onClick={() => removeManualWinner(winner.userId, 'champion')}
-                                                            className="text-red-500 h-8 w-8 p-0"
+                                                            className="text-muted-foreground hover:text-red-500 h-8 w-8 p-0"
                                                         >
                                                             <X className="h-4 w-4" />
                                                         </Button>
@@ -564,30 +731,44 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
                                             </div>
 
                                             <div className="mt-2">
-                                                <UserSearch onSelect={(u) => addManualWinner(u, 'champion')} />
+                                                <Select onValueChange={(userId) => {
+                                                    const p = participants.find(p => p.userId === userId);
+                                                    if (p) addManualWinner({ id: p.userId, nickname: p.displayName, photoUrl: p.photoUrl }, 'champion');
+                                                }}>
+                                                    <SelectTrigger className="bg-background">
+                                                        <SelectValue placeholder="Selecione o Campeão..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {participants.map(p => (
+                                                            <SelectItem key={p.userId} value={p.userId}>
+                                                                {p.displayName}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
                                             </div>
                                         </div>
 
                                         {/* Gold Winner Selector */}
-                                        <div className="grid gap-2 p-4 bg-slate-50 border rounded-lg">
-                                            <Label className="text-base font-bold text-amber-600">🌟 Palpiteiro de Ouro</Label>
+                                        <div className="grid gap-2 p-4 bg-muted/30 border border-border rounded-lg">
+                                            <Label className="text-base font-bold text-yellow-600 dark:text-yellow-500">🌟 Palpiteiro de Ouro</Label>
 
                                             {/* List of current gold winners */}
                                             <div className="space-y-2">
                                                 {form.watch("manualWinners")?.filter(w => w.position === 'gold_winner').map((winner) => (
-                                                    <div key={winner.userId} className="flex items-center justify-between gap-3 bg-white p-2 rounded border">
+                                                    <div key={winner.userId} className="flex items-center justify-between gap-3 bg-card border border-border p-2 rounded shadow-sm">
                                                         <div className="flex items-center gap-2">
-                                                            <div className="h-8 w-8 bg-slate-200 rounded-full overflow-hidden">
+                                                            <div className="h-8 w-8 bg-muted rounded-full overflow-hidden">
                                                                 {winner.photoUrl && <img src={winner.photoUrl} className="h-full w-full object-cover" />}
                                                             </div>
-                                                            <span className="font-medium">{winner.displayName}</span>
+                                                            <span className="font-medium text-foreground">{winner.displayName}</span>
                                                         </div>
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
                                                             type="button"
                                                             onClick={() => removeManualWinner(winner.userId, 'gold_winner')}
-                                                            className="text-red-500 h-8 w-8 p-0"
+                                                            className="text-muted-foreground hover:text-red-500 h-8 w-8 p-0"
                                                         >
                                                             <X className="h-4 w-4" />
                                                         </Button>
@@ -596,7 +777,21 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
                                             </div>
 
                                             <div className="mt-2">
-                                                <UserSearch onSelect={(u) => addManualWinner(u, 'gold_winner')} />
+                                                <Select onValueChange={(userId) => {
+                                                    const p = participants.find(p => p.userId === userId);
+                                                    if (p) addManualWinner({ id: p.userId, nickname: p.displayName, photoUrl: p.photoUrl }, 'gold_winner');
+                                                }}>
+                                                    <SelectTrigger className="bg-background">
+                                                        <SelectValue placeholder="Selecione um participante..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {participants.map(p => (
+                                                            <SelectItem key={p.userId} value={p.userId}>
+                                                                {p.displayName}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
                                             </div>
                                         </div>
 
@@ -606,7 +801,7 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
                         </CardContent>
                     </Card>
                 </TabsContent>
-            </Tabs>
+            </Tabs >
 
             <div className="flex justify-end">
                 <Button type="submit" size="lg" disabled={isSubmitting}>

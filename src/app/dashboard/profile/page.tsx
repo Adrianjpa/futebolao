@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { doc, getDoc, updateDoc, query, collection, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { getCachedData } from "@/utils/cache";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,7 +51,8 @@ export default function ProfilePage() {
         ranking: "-",
         totalPredictions: 0,
         championshipsDisputed: 0,
-        titlesWon: 0
+        titlesWon: 0,
+        goldMedals: 0 // New Stat
     });
     const [championships, setChampionships] = useState<any[]>([]);
     const [selectedChampionship, setSelectedChampionship] = useState("all");
@@ -81,7 +83,6 @@ export default function ProfilePage() {
 
                 if (docSnap.exists()) {
                     const data = docSnap.data();
-                    // Logic: nickname takes priority for display, but we store both
                     setFullName(data.nome || data.name || user.displayName || "");
                     setNickname(data.nickname || "");
                     setPhotoURL(data.fotoPerfil || data.photoURL || user.photoURL || "");
@@ -91,28 +92,46 @@ export default function ProfilePage() {
                     setPhotoURL(user.photoURL || "");
                 }
 
-                // 2. Fetch User Predictions
+                // 2. Fetch User Predictions (Cached)
                 const predsQuery = query(collection(db, "predictions"), where("userId", "==", user.uid));
-                const predsSnap = await getDocs(predsQuery);
-                const predictions = predsSnap.docs.map(d => d.data());
+                const predictions = await getCachedData(`user_predictions_${user.uid}`, async () => {
+                    const predsSnap = await getDocs(predsQuery);
+                    return predsSnap.docs.map(d => d.data());
+                }, 15); // 15 min cache
                 setUserPredictions(predictions);
 
-                const uniqueChampionshipIds = Array.from(new Set(predictions.map((p: any) => p.championshipId)));
-
-                // 3. Fetch Championships Details
-                if (uniqueChampionshipIds.length > 0) {
+                // 3. Fetch All Championships (Cached to save reads)
+                const allChamps = await getCachedData("championships_cache", async () => {
                     const champsQuery = query(collection(db, "championships"));
                     const champsSnap = await getDocs(champsQuery);
-                    const champsData = champsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    setChampionships(champsData.filter((c: any) => uniqueChampionshipIds.includes(c.id)));
-                }
+                    return champsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                }, 1440); // 24 hours cache
+
+                console.log("Debug - All Champs (Cached):", allChamps);
+
+                // Calculate User Stats from Championships
+                const championshipsDisputed = allChamps.filter((c: any) =>
+                    c.participants?.some((p: any) => p.userId === user.uid)
+                );
+
+                const titlesWon = allChamps.filter((c: any) =>
+                    c.manualWinners?.some((w: any) => w.userId === user.uid && w.position === 'champion')
+                ).length;
+
+                console.log("Debug - Participant In:", championshipsDisputed.map((c: any) => c.name));
+                console.log("Debug - Titles Won Base:", titlesWon);
+
+                const goldMedals = allChamps.filter((c: any) =>
+                    c.manualWinners?.some((w: any) => w.userId === user.uid && w.position === 'gold_winner')
+                ).length;
 
                 setStats({
                     totalPoints: currentPoints,
                     ranking: "-",
                     totalPredictions: predictions.length,
-                    championshipsDisputed: uniqueChampionshipIds.length,
-                    titlesWon: 0
+                    championshipsDisputed: championshipsDisputed.length,
+                    titlesWon: titlesWon,
+                    goldMedals: goldMedals
                 });
 
             } catch (error) {
@@ -459,20 +478,32 @@ export default function ProfilePage() {
             </Card>
 
             {/* General Info Section */}
-            <div className="space-y-4">
+            < div className="space-y-4" >
                 <h2 className="text-xl font-bold flex items-center gap-2">
                     Informações Gerais
                 </h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     {/* Titles Card */}
                     <Card className="bg-card/50 hover:bg-card transition-colors">
                         <CardContent className="p-6 flex items-start justify-between">
                             <div className="space-y-1">
                                 <p className="text-sm font-medium text-muted-foreground">Títulos Conquistados</p>
-                                <p className="text-3xl font-bold">{stats.titlesWon}</p>
+                                <p className="text-3xl font-bold text-yellow-500">{stats.titlesWon}</p>
                                 <p className="text-xs text-muted-foreground">Total de campeonatos vencidos</p>
                             </div>
                             <Trophy className="h-8 w-8 text-yellow-500 opacity-80" />
+                        </CardContent>
+                    </Card>
+
+                    {/* Gold Medals Card (Palpite do Campeão) */}
+                    <Card className="bg-card/50 hover:bg-card transition-colors">
+                        <CardContent className="p-6 flex items-start justify-between">
+                            <div className="space-y-1">
+                                <p className="text-sm font-medium text-muted-foreground">Palpite do Campeão</p>
+                                <p className="text-3xl font-bold text-amber-500">{stats.goldMedals}</p>
+                                <p className="text-xs text-muted-foreground">Acertos de campeão (Ouro)</p>
+                            </div>
+                            <Gem className="h-8 w-8 text-amber-500 opacity-80" />
                         </CardContent>
                     </Card>
 
@@ -481,8 +512,8 @@ export default function ProfilePage() {
                         <CardContent className="p-6 flex items-start justify-between">
                             <div className="space-y-1">
                                 <p className="text-sm font-medium text-muted-foreground">Campeonatos Disputados</p>
-                                <p className="text-3xl font-bold">{stats.championshipsDisputed}</p>
-                                <p className="text-xs text-muted-foreground">Campeonatos com palpites</p>
+                                <p className="text-3xl font-bold text-blue-500">{stats.championshipsDisputed}</p>
+                                <p className="text-xs text-muted-foreground">Participações em ligas/copas</p>
                             </div>
                             <Users className="h-8 w-8 text-blue-500 opacity-80" />
                         </CardContent>
@@ -493,17 +524,17 @@ export default function ProfilePage() {
                         <CardContent className="p-6 flex items-start justify-between">
                             <div className="space-y-1">
                                 <p className="text-sm font-medium text-muted-foreground">Total de Palpites</p>
-                                <p className="text-3xl font-bold">{stats.totalPredictions}</p>
+                                <p className="text-3xl font-bold text-purple-500">{stats.totalPredictions}</p>
                                 <p className="text-xs text-muted-foreground">Jogos com palpites enviados</p>
                             </div>
                             <Gamepad2 className="h-8 w-8 text-purple-500 opacity-80" />
                         </CardContent>
                     </Card>
                 </div>
-            </div>
+            </div >
 
             {/* Stats by Championship Section */}
-            <div className="space-y-4">
+            < div className="space-y-4" >
                 <div className="flex items-center justify-between">
                     <h2 className="text-xl font-bold">Estatísticas por Campeonato</h2>
                     <div className="w-[250px]">
@@ -622,7 +653,7 @@ export default function ProfilePage() {
                         </CardContent>
                     </Card>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }

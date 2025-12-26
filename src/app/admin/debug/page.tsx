@@ -1,21 +1,24 @@
+
 "use client";
 
-import AuthGuard from "@/components/auth/AuthGuard";
 import { UpdateDebugger } from "@/components/admin/UpdateDebugger";
+import { AdminUpdateProvider } from "@/contexts/AdminUpdateContext";
 
-export default function AdminDebugPage() {
+export default function DebugPage() {
     return (
-        <AuthGuard requiredRole="admin">
+        <AdminUpdateProvider>
             <div className="space-y-6">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Debug de Sistema</h1>
-                    <p className="text-muted-foreground">Ferramentas de diagnóstico e atualização manual.</p>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight">Debug de Sistema</h1>
+                        <p className="text-muted-foreground mt-2">Ferramentas de diagnóstico e atualização manual.</p>
+                    </div>
                 </div>
 
-                <div className="grid gap-6">
+                <div className="w-full">
                     <UpdateDebugger />
                 </div>
             </div>
-        </AuthGuard>
+        </AdminUpdateProvider>
     );
 }

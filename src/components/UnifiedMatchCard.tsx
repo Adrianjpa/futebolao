@@ -45,6 +45,7 @@ interface UnifiedMatchCardProps {
     isAdmin?: boolean;
     onUpdate?: () => void;
     users?: any[];
+    teamMode?: string;
 }
 
 export function UnifiedMatchCard({
@@ -56,7 +57,8 @@ export function UnifiedMatchCard({
     hasPrediction,
     isAdmin,
     onUpdate,
-    users = []
+    users = [],
+    teamMode = "clubes"
 }: UnifiedMatchCardProps) {
     const matchDate = match.date?.seconds ? new Date(match.date.seconds * 1000) : new Date(match.date);
     const now = new Date();
@@ -178,17 +180,30 @@ export function UnifiedMatchCard({
 
     const TeamDisplay = ({ name, crest, align }: { name: string, crest?: string, align: 'left' | 'right' }) => {
         const flag = crest || getFlagUrl(name);
+        const isSelecao = teamMode === 'selecoes';
+
+        const containerClasses = isSelecao
+            ? "h-10 w-10 relative flex items-center justify-center rounded-full overflow-hidden shadow-sm border bg-white"
+            : "h-10 w-10 relative flex items-center justify-center";
+
+        const imgClasses = isSelecao
+            ? "h-full w-full object-cover"
+            : "max-h-full max-w-full object-contain";
+
+        const mobileContainerClasses = isSelecao
+            ? "cursor-pointer active:scale-95 transition-transform relative h-12 w-12 flex items-center justify-center rounded-full overflow-hidden shadow-sm border bg-white"
+            : "cursor-pointer active:scale-95 transition-transform relative h-12 w-12 flex items-center justify-center";
 
         return (
             <>
                 {/* Desktop: Name and Crest */}
                 <div className={`hidden md:flex items-center gap-3 flex-1 ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
                     {align === 'right' && <span className="font-bold text-sm lg:text-base text-right truncate">{name}</span>}
-                    <div className="h-10 w-10 relative flex items-center justify-center">
+                    <div className={containerClasses}>
                         {flag ? (
-                            <img src={flag} alt={name} className="max-h-full max-w-full object-contain" />
+                            <img src={flag} alt={name} className={imgClasses} />
                         ) : (
-                            <div className="h-full w-full bg-muted rounded flex items-center justify-center text-[10px] font-bold">{(name || "").substring(0, 2)}</div>
+                            <div className="h-full w-full bg-muted flex items-center justify-center text-[10px] font-bold">{(name || "").substring(0, 2)}</div>
                         )}
                     </div>
                     {align === 'left' && <span className="font-bold text-sm lg:text-base text-left truncate">{name}</span>}
@@ -198,11 +213,11 @@ export function UnifiedMatchCard({
                 <div className={`md:hidden flex items-center ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
                     <Popover>
                         <PopoverTrigger asChild>
-                            <div className="cursor-pointer active:scale-95 transition-transform relative h-12 w-12 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                            <div className={mobileContainerClasses} onClick={(e) => e.stopPropagation()}>
                                 {flag ? (
-                                    <img src={flag} alt={name} className="max-h-full max-w-full object-contain" />
+                                    <img src={flag} alt={name} className={imgClasses} />
                                 ) : (
-                                    <div className="h-8 w-8 bg-muted rounded flex items-center justify-center text-[10px] font-bold">{(name || "").substring(0, 2)}</div>
+                                    <div className="h-full w-full bg-muted flex items-center justify-center text-[10px] font-bold">{(name || "").substring(0, 2)}</div>
                                 )}
                             </div>
                         </PopoverTrigger>
@@ -327,12 +342,19 @@ export function UnifiedMatchCard({
                     </div>
 
                     {/* Date/Time - Centered Below Score */}
+                    {/* Date/Time - Centered Below Score */}
                     {(!isLive || isFinished) && (
                         <div className="mt-2 text-xs text-muted-foreground font-medium flex items-center gap-1 bg-background/50 px-2 py-0.5 rounded-full border border-transparent hover:border-border transition-colors">
                             <Calendar className="h-3 w-3" />
-                            {isToday(matchDate) ? "Hoje" : isTomorrow(matchDate) ? "Amanhã" : isYesterday(matchDate) ? "Ontem" : format(matchDate, "dd/MM")}
-                            <span className="mx-0.5">•</span>
-                            {format(matchDate, "HH:mm")}
+                            {matchDate.getFullYear() < new Date().getFullYear() ? (
+                                <span>{matchDate.getFullYear()}</span>
+                            ) : (
+                                <>
+                                    {isToday(matchDate) ? "Hoje" : isTomorrow(matchDate) ? "Amanhã" : isYesterday(matchDate) ? "Ontem" : format(matchDate, "dd/MM")}
+                                    <span className="mx-0.5">•</span>
+                                    {format(matchDate, "HH:mm")}
+                                </>
+                            )}
                         </div>
                     )}
 
@@ -434,11 +456,15 @@ export function UnifiedMatchCard({
                                         <div key={pred.matchId + (pred.userId || pred.userName)} className={`flex items-center p-3 rounded-xl border mb-1 transition-colors shadow-sm ${rowBg}`}>
                                             {/* Left: Avatar + Name */}
                                             <div className="flex items-center gap-3 w-1/3">
-                                                <Avatar className="h-8 w-8 border-2 border-background/50">
-                                                    <AvatarImage src={user?.photoURL} />
-                                                    <AvatarFallback className="text-[10px] font-bold">{(user?.name || pred.userName || "?").substring(0, 2).toUpperCase()}</AvatarFallback>
-                                                </Avatar>
-                                                <span className="font-bold text-sm truncate leading-tight opacity-90">{user?.name || pred.userName || "..."}</span>
+                                                <Link href={`/dashboard/profile/${user?.id || pred.userId}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                                                    <Avatar className="h-8 w-8 border-2 border-background/50">
+                                                        <AvatarImage src={user?.photoURL} />
+                                                        <AvatarFallback className="text-[10px] font-bold">{(user?.name || pred.userName || "?").substring(0, 2).toUpperCase()}</AvatarFallback>
+                                                    </Avatar>
+                                                    <span className="font-bold text-sm truncate leading-tight opacity-90 hover:underline hover:text-primary">
+                                                        {user?.name || pred.userName || "..."}
+                                                    </span>
+                                                </Link>
                                             </div>
 
                                             {/* Center: Prediction Score */}
