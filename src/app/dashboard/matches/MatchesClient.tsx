@@ -17,6 +17,7 @@ interface Championship {
     id: string;
     name: string;
     status: string;
+    category?: string;
 }
 
 interface Team {
@@ -50,6 +51,7 @@ export default function MatchesClient() {
 
     const [championships, setChampionships] = useState<Championship[]>([]);
     const [selectedChampionship, setSelectedChampionship] = useState<string>("all");
+    const [categoryFilter, setCategoryFilter] = useState("all");
     const [matches, setMatches] = useState<Match[]>([]);
     const [teams, setTeams] = useState<Team[]>([]);
     const [users, setUsers] = useState<any[]>([]);
@@ -100,12 +102,17 @@ export default function MatchesClient() {
         const data: Championship[] = [];
         snap.forEach(doc => {
             const d = doc.data();
-            // Filter out archived championships from the UI list entirely
-            if (d.status !== 'arquivado') {
+            // Filter out finished/archived championships from the UI list entirely
+            if (d.status === 'ativo') {
                 data.push({ id: doc.id, ...d } as Championship);
             }
         });
         setChampionships(data);
+
+        // Auto-select if only one active championship
+        if (data.length === 1) {
+            setSelectedChampionship(data[0].id);
+        }
     };
 
     const fetchTeams = async () => {
@@ -116,6 +123,19 @@ export default function MatchesClient() {
         setTeams(data);
     };
 
+    // Helper to filter championships by category (reused in fetchMatches)
+    const getChampionshipsByCategory = () => {
+        return championships.filter(c => {
+            if (categoryFilter === 'all') return true;
+            const cat = c.category || 'other';
+            if (categoryFilter === 'other') {
+                const specificCategories = ['world_cup', 'euro', 'copa_america', 'brasileirao', 'champions_league', 'libertadores', 'nacional'];
+                return !specificCategories.includes(cat);
+            }
+            return cat === categoryFilter;
+        });
+    };
+
     const fetchMatches = async (page: number = 1, stack: QueryDocumentSnapshot[] = []) => {
         setLoading(true);
         try {
@@ -123,29 +143,29 @@ export default function MatchesClient() {
             let constraints: any[] = [];
 
             // Basic constraints: Status scheduled, ordered by date
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
             constraints.push(where("status", "==", "scheduled"));
+            constraints.push(where("date", ">=", today)); // Only future matches
             constraints.push(orderBy("date", "asc"));
 
             if (selectedChampionship && selectedChampionship !== "all") {
                 // Specific Championship
                 constraints.unshift(where("championshipId", "==", selectedChampionship));
             } else {
-                // All Championships: Filter by ACTIVE championships
+                // All Championships: Filter by Category-Filtered ACTIVE championships
+                const validChamps = getChampionshipsByCategory().map(c => c.id);
 
-                if (championships.length > 0) {
-                    const activeChamps = championships.filter(c => c.status !== 'arquivado').map(c => c.id);
-                    if (activeChamps.length === 0) {
-                        // Loaded but NO active championships found.
+                if (validChamps.length > 0) {
+                    // Firestore IN query limit is 30.
+                    constraints.unshift(where("championshipId", "in", validChamps.slice(0, 30)));
+                } else {
+                    if (championships.length > 0) {
                         setMatches([]);
                         setLoading(false);
-                        return; // No active championships, so no matches to show.
+                        return;
                     }
-                    // Firestore IN query limit is 30.
-                    constraints.unshift(where("championshipId", "in", activeChamps.slice(0, 30)));
-                } else {
-                    // Championships not loaded yet? 
-                    // To stay safe and not show archived games, we can return empty until they load.
-                    // The useEffect([championships]) will trigger a re-fetch.
                     setMatches([]);
                     setLoading(false);
                     return;
@@ -216,7 +236,7 @@ export default function MatchesClient() {
         setCurrentPage(1);
         setIsLastPage(false);
         fetchMatches(1, []);
-    }, [selectedChampionship, championships]); // Re-run if championships load to apply 'All' filter correctly
+    }, [selectedChampionship, categoryFilter, championships]);
 
     // HANDLERS
     const handleNextPage = () => {
@@ -279,86 +299,128 @@ export default function MatchesClient() {
         }
     };
 
+    // Computed Variables for UI
+    const filteredChampionships = getChampionshipsByCategory();
+
+    const availableCategories = new Set<string>();
+    championships.forEach(c => {
+        const cat = c.category || 'other';
+        if (['world_cup', 'euro', 'copa_america', 'brasileirao', 'champions_league', 'libertadores', 'nacional'].includes(cat)) {
+            availableCategories.add(cat);
+        } else {
+            availableCategories.add('other');
+        }
+    });
+
+    const getCategoryLabel = (cat: string) => {
+        switch (cat) {
+            case 'world_cup': return 'Copa do Mundo';
+            case 'euro': return 'Eurocopa';
+            case 'copa_america': return 'Copa América';
+            case 'brasileirao': return 'Brasileirão';
+            case 'libertadores': return 'Libertadores';
+            case 'champions_league': return 'Champions League';
+            case 'nacional': return 'Nacional';
+            case 'other': return 'Outros';
+            default: return 'Outros';
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <h1 className="text-3xl font-bold tracking-tight">Próximas Partidas</h1>
 
-                {isAdmin && (
-                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                        <DialogTrigger asChild>
-                            <Button disabled={!selectedChampionship || selectedChampionship === "all"}>
-                                <Plus className="mr-2 h-4 w-4" />
-                                Nova Partida
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>Agendar Partida</DialogTitle>
-                            </DialogHeader>
-                            <div className="grid gap-4 py-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="grid gap-2">
-                                        <Label>Time Mandante</Label>
-                                        <Select value={homeTeamId} onValueChange={setHomeTeamId}>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Selecione" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label>Time Visitante</Label>
-                                        <Select value={awayTeamId} onValueChange={setAwayTeamId}>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Selecione" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label>Data e Hora</Label>
-                                    <div className="flex gap-2">
-                                        <Input type="date" value={matchDate} onChange={e => setMatchDate(e.target.value)} />
-                                        <Input type="time" value={matchTime} onChange={e => setMatchTime(e.target.value)} />
-                                    </div>
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label>Rodada / Fase</Label>
-                                    <Input value={round} onChange={e => setRound(e.target.value)} placeholder="Ex: Rodada 1" />
-                                </div>
-                            </div>
-                            <DialogFooter>
-                                <Button onClick={handleAddMatch}>Agendar</Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
-                )}
-            </div>
+                <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+                    {/* Category Filter */}
+                    <Select value={categoryFilter} onValueChange={(val) => {
+                        setCategoryFilter(val);
+                        setSelectedChampionship("all");
+                    }}>
+                        <SelectTrigger className="w-full sm:w-[180px]">
+                            <SelectValue placeholder="Categoria" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Todas Categorias</SelectItem>
+                            {['world_cup', 'euro', 'copa_america', 'brasileirao', 'libertadores', 'champions_league', 'nacional', 'other'].map(cat => {
+                                if (availableCategories.has(cat)) {
+                                    return <SelectItem key={cat} value={cat}>{getCategoryLabel(cat)}</SelectItem>;
+                                }
+                                return null;
+                            })}
+                        </SelectContent>
+                    </Select>
 
-            <Card className="bg-muted/30">
-                <CardContent className="p-4 flex items-center gap-4">
-                    <div className="w-full md:w-[300px]">
-                        <Label className="mb-1 block text-xs uppercase text-muted-foreground font-bold">Filtrar por Campeonato</Label>
-                        <Select value={selectedChampionship} onValueChange={setSelectedChampionship}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Todos os Campeonatos" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Todos os Campeonatos</SelectItem>
-                                {championships.map(c => (
-                                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </CardContent>
-            </Card>
+                    {/* Championship Filter */}
+                    <Select value={selectedChampionship} onValueChange={setSelectedChampionship}>
+                        <SelectTrigger className="w-full sm:w-[220px]">
+                            <SelectValue placeholder="Campeonato" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Todos os Campeonatos</SelectItem>
+                            {filteredChampionships.map(c => (
+                                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    {isAdmin && (
+                        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                            <DialogTrigger asChild>
+                                <Button disabled={!selectedChampionship || selectedChampionship === "all"}>
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Nova
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>Agendar Partida</DialogTitle>
+                                </DialogHeader>
+                                <div className="grid gap-4 py-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid gap-2">
+                                            <Label>Time Mandante</Label>
+                                            <Select value={homeTeamId} onValueChange={setHomeTeamId}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Selecione" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label>Time Visitante</Label>
+                                            <Select value={awayTeamId} onValueChange={setAwayTeamId}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Selecione" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label>Data e Hora</Label>
+                                        <div className="flex gap-2">
+                                            <Input type="date" value={matchDate} onChange={e => setMatchDate(e.target.value)} />
+                                            <Input type="time" value={matchTime} onChange={e => setMatchTime(e.target.value)} />
+                                        </div>
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label>Rodada / Fase</Label>
+                                        <Input value={round} onChange={e => setRound(e.target.value)} placeholder="Ex: Rodada 1" />
+                                    </div>
+                                </div>
+                                <DialogFooter>
+                                    <Button onClick={handleAddMatch}>Agendar</Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+                    )}
+                </div>
+            </div>
 
             <div className="space-y-4">
                 {matches.length === 0 && !loading && (

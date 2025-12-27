@@ -63,7 +63,12 @@ export default function RankingPage() {
             const q = query(collection(db, "championships"));
             const snap = await getDocs(q);
             const data: Championship[] = [];
-            snap.forEach(doc => data.push({ id: doc.id, ...doc.data() } as Championship));
+            snap.forEach(doc => {
+                const docData = doc.data();
+                if (docData.status !== 'arquivado') {
+                    data.push({ id: doc.id, ...docData } as Championship);
+                }
+            });
 
             // Sort: Active first, then by createdAt (Recent -> Oldest), then by name
             data.sort((a, b) => {
@@ -228,39 +233,73 @@ export default function RankingPage() {
 
     const isLegacy = championships.find(c => c.id === selectedChampionship)?.legacyImport;
 
+    const [categoryFilter, setCategoryFilter] = useState("all");
+
+    // Computed Chmapionships based on Category
+    const filteredChampionships = championships.filter(c => {
+        if (categoryFilter === 'all') return true;
+        const cat = c.category || 'other'; // Default to 'other' if category is not set
+        if (categoryFilter === 'other') {
+            // If filtering for 'other', show championships whose category is NOT one of the specific ones
+            const specificCategories = ['world_cup', 'euro', 'copa_america', 'brasileirao', 'champions_league', 'libertadores', 'nacional'];
+            return !specificCategories.includes(cat);
+        }
+        // Otherwise, filter by the selected category
+        return cat === categoryFilter;
+    });
+
+    const handleSort = (field: 'totalPoints' | 'exactScores' | 'outcomes') => {
+        if (sortBy === field) {
+            // Toggle direction? Currently only descending is supported/needed mostly
+            return;
+        }
+        setSortBy(field);
+    };
+
     return (
         <div className="space-y-6">
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <h1 className="text-3xl font-bold tracking-tight">Ranking</h1>
 
-                <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="w-full sm:w-[250px]">
-                        <Select value={selectedChampionship} onValueChange={setSelectedChampionship}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Selecione um Campeonato" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {championships.map(c => (
+                <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+                    {/* Category Filter */}
+                    <Select value={categoryFilter} onValueChange={(val) => {
+                        setCategoryFilter(val);
+                        setSelectedChampionship("all");
+                    }}>
+                        <SelectTrigger className="w-full sm:w-[180px]">
+                            <SelectValue placeholder="Categoria" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Todas Categorias</SelectItem>
+                            <SelectItem value="world_cup">Copa do Mundo</SelectItem>
+                            <SelectItem value="euro">Eurocopa</SelectItem>
+                            <SelectItem value="copa_america">Copa América</SelectItem>
+                            <SelectItem value="brasileirao">Brasileirão</SelectItem>
+                            <SelectItem value="libertadores">Libertadores</SelectItem>
+                            <SelectItem value="champions_league">Champions League</SelectItem>
+                            <SelectItem value="nacional">Nacional</SelectItem>
+                            <SelectItem value="other">Outros</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    {/* Championship Filter */}
+                    <Select value={selectedChampionship} onValueChange={setSelectedChampionship}>
+                        <SelectTrigger className="w-full sm:w-[260px]">
+                            <SelectValue placeholder="Selecione um Campeonato" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {filteredChampionships.length > 0 ? (
+                                filteredChampionships.map(c => (
                                     <SelectItem key={c.id} value={c.id}>
                                         {c.name} {c.status === 'ativo' && '(Ativo)'}
                                     </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className="w-full sm:w-[180px]">
-                        <Select value={sortBy} onValueChange={(val: any) => setSortBy(val)}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Ordenar por" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="totalPoints">Total de Pontos</SelectItem>
-                                <SelectItem value="exactScores">Buchas (3 pts)</SelectItem>
-                                <SelectItem value="outcomes">Situações (1 pt)</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
+                                ))
+                            ) : (
+                                <SelectItem value="none" disabled>Nenhum campeonato encontrado</SelectItem>
+                            )}
+                        </SelectContent>
+                    </Select>
                 </div>
             </div>
 
@@ -271,14 +310,42 @@ export default function RankingPage() {
                         <div className="w-8 text-center shrink-0">Pos.</div>
                         <div className="flex-1">Jogador</div>
 
-                        {/* Desktop Stats Headers: Points First */}
-                        <div className="w-16 text-center text-primary font-bold shrink-0">Pontos</div>
-                        <div className="hidden sm:block w-16 text-center text-primary font-bold shrink-0">Buchas</div>
-                        <div className="hidden sm:block w-16 text-center text-primary font-bold shrink-0">Situação</div>
+                        {/* Interactive Stats Headers (Desktop) */}
+                        <div
+                            onClick={() => handleSort('totalPoints')}
+                            className={`hidden sm:block w-16 text-center shrink-0 cursor-pointer hover:bg-white/5 rounded py-1 transition-colors select-none ${sortBy === 'totalPoints' ? 'text-primary font-bold bg-primary/5' : ''}`}
+                            title="Ordenar por Pontos"
+                        >
+                            Pontos
+                        </div>
+                        <div
+                            onClick={() => handleSort('exactScores')}
+                            className={`hidden sm:block w-16 text-center shrink-0 cursor-pointer hover:bg-white/5 rounded py-1 transition-colors select-none ${sortBy === 'exactScores' ? 'text-primary font-bold bg-primary/5' : ''}`}
+                            title="Ordenar por Buchas (3 pts)"
+                        >
+                            Buchas
+                        </div>
+                        <div
+                            onClick={() => handleSort('outcomes')}
+                            className={`hidden sm:block w-16 text-center shrink-0 cursor-pointer hover:bg-white/5 rounded py-1 transition-colors select-none ${sortBy === 'outcomes' ? 'text-primary font-bold bg-primary/5' : ''}`}
+                            title="Ordenar por Situações (1 pt)"
+                        >
+                            Situação
+                        </div>
 
-                        {/* Mobile Stats Header (Dynamic) */}
-                        {sortBy === 'exactScores' && <div className="sm:hidden w-8 text-center text-primary font-bold shrink-0">Buchas</div>}
-                        {sortBy === 'outcomes' && <div className="sm:hidden w-8 text-center text-primary font-bold shrink-0">Situação</div>}
+                        {/* Mobile Dynamic Header (Dropdown Embedded) */}
+                        <div className="sm:hidden w-20 shrink-0 flex justify-end">
+                            <Select value={sortBy} onValueChange={(val: any) => setSortBy(val)}>
+                                <SelectTrigger className="w-full h-8 px-2 text-xs font-bold text-primary bg-transparent border-none hover:bg-white/10 focus:ring-0 shadow-none justify-end gap-1">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent align="end">
+                                    <SelectItem value="totalPoints">Pontos</SelectItem>
+                                    <SelectItem value="exactScores">Buchas (3pts)</SelectItem>
+                                    <SelectItem value="outcomes">Situação (1pt)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -376,20 +443,23 @@ export default function RankingPage() {
                                         </div>
                                     </div>
 
-                                    {/* Pontos Column (Now First) */}
-                                    <div className="w-16 text-center shrink-0">
+                                    {/* Desktop Stats Columns */}
+                                    <div className="hidden sm:block w-16 text-center shrink-0">
                                         <div className="font-bold text-lg text-primary">
                                             {user.totalPoints || 0}
                                         </div>
                                     </div>
-
-                                    {/* Desktop Stats Columns */}
                                     <div className="hidden sm:block w-16 text-center text-sm font-medium text-muted-foreground shrink-0">{user.exactScores}</div>
                                     <div className="hidden sm:block w-16 text-center text-sm font-medium text-muted-foreground shrink-0">{user.outcomes}</div>
 
-                                    {/* Mobile Stats (Dynamic) */}
-                                    {sortBy === 'exactScores' && <div className="sm:hidden w-8 text-center text-sm font-medium text-muted-foreground shrink-0">{user.exactScores}</div>}
-                                    {sortBy === 'outcomes' && <div className="sm:hidden w-8 text-center text-sm font-medium text-muted-foreground shrink-0">{user.outcomes}</div>}
+                                    {/* Mobile Dynamic Column */}
+                                    <div className="sm:hidden w-16 text-center shrink-0">
+                                        <div className={`font-bold text-lg ${sortBy === 'totalPoints' ? 'text-primary' : 'text-muted-foreground'}`}>
+                                            {sortBy === 'totalPoints' && (user.totalPoints || 0)}
+                                            {sortBy === 'exactScores' && (user.exactScores || 0)}
+                                            {sortBy === 'outcomes' && (user.outcomes || 0)}
+                                        </div>
+                                    </div>
                                 </div>
                             );
                         })}

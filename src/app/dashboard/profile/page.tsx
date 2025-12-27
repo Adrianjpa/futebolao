@@ -125,10 +125,19 @@ export default function ProfilePage() {
                     c.manualWinners?.some((w: any) => w.userId === user.uid && w.position === 'gold_winner')
                 ).length;
 
+                // Calculate Legacy Predictions
+                let legacyPredictions = 0;
+                const userData = docSnap.data();
+                if (userData?.legacyStats) {
+                    Object.values(userData.legacyStats).forEach((stat: any) => {
+                        legacyPredictions += (stat.totalPredictions || 0);
+                    });
+                }
+
                 setStats({
                     totalPoints: currentPoints,
                     ranking: "-",
-                    totalPredictions: predictions.length,
+                    totalPredictions: predictions.length + legacyPredictions,
                     championshipsDisputed: championshipsDisputed.length,
                     titlesWon: titlesWon,
                     goldMedals: goldMedals

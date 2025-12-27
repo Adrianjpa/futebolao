@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence, browserSessionPersistence } from "firebase/auth";
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,18 +14,15 @@ import { Trophy } from "lucide-react";
 export default function LoginPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [rememberMe, setRememberMe] = useState(true);
     const [error, setError] = useState("");
     const router = useRouter();
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
             await signInWithEmailAndPassword(auth, email, password);
             router.push("/dashboard");
         } catch (err: any) {
-            console.error(err);
             setError("Erro ao fazer login. Verifique suas credenciais.");
         }
     };
@@ -82,20 +79,6 @@ export default function LoginPage() {
                             required
                         />
                     </div>
-
-                    <div className="flex items-center space-x-2">
-                        <input
-                            type="checkbox"
-                            id="remember"
-                            checked={rememberMe}
-                            onChange={(e) => setRememberMe(e.target.checked)}
-                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                        />
-                        <Label htmlFor="remember" className="text-sm font-normal cursor-pointer text-muted-foreground select-none">
-                            Lembrar-me
-                        </Label>
-                    </div>
-
                     <Button type="submit" className="w-full bg-primary hover:bg-primary/90">
                         Entrar
                     </Button>

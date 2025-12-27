@@ -304,7 +304,7 @@ export default function DashboardClient() {
                         </CardHeader>
                         <CardContent className="flex-1">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                {Object.values(championshipsMap).filter((c: any) => c.status !== 'arquivado').map((champ: any) => {
+                                {Object.values(championshipsMap).filter((c: any) => c.status === 'ativo').map((champ: any) => {
                                     // Fallback: Use global top user as leader for now
                                     const leader = topUsers[0];
 
@@ -340,7 +340,7 @@ export default function DashboardClient() {
                                         </div>
                                     );
                                 })}
-                                {Object.values(championshipsMap).filter((c: any) => c.status !== 'arquivado').length === 0 && (
+                                {Object.values(championshipsMap).filter((c: any) => c.status === 'ativo').length === 0 && (
                                     <div className="w-full text-center text-muted-foreground text-sm py-4">
                                         Nenhum campeonato ativo.
                                     </div>

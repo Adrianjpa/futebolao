@@ -17,6 +17,20 @@
                     "order": "DESCENDING"
                 }
             ]
+        },
+        {
+            "collectionGroup": "legacy_history",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "linkedUserId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "rank",
+                    "order": "ASCENDING"
+                }
+            ]
         }
     ],
     "fieldOverrides": []

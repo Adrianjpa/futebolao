@@ -65,7 +65,12 @@ export default function HistoryClient() {
         const q = query(collection(db, "championships"));
         const snap = await getDocs(q);
         const data: Championship[] = [];
-        snap.forEach(doc => data.push({ id: doc.id, ...doc.data() } as Championship));
+        snap.forEach(doc => {
+            const d = doc.data();
+            if (d.status !== 'arquivado') {
+                data.push({ id: doc.id, ...d } as Championship);
+            }
+        });
         setChampionships(data);
     };
 
@@ -192,13 +197,13 @@ export default function HistoryClient() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <h1 className="text-3xl font-bold tracking-tight">Histórico de Partidas</h1>
 
-                <div className="flex gap-4 w-full md:w-2/3">
+                <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
                     <Select value={categoryFilter} onValueChange={(val) => {
                         setCategoryFilter(val);
                         setSelectedChampionship("all"); // Reset specific championship which might not belong to new category
                         setPageStack([]);
                     }}>
-                        <SelectTrigger className="w-[180px]">
+                        <SelectTrigger className="w-full sm:w-[180px]">
                             <SelectValue placeholder="Categoria" />
                         </SelectTrigger>
                         <SelectContent>
@@ -217,7 +222,7 @@ export default function HistoryClient() {
                         setSelectedChampionship(val);
                         setPageStack([]);
                     }}>
-                        <SelectTrigger className="flex-1">
+                        <SelectTrigger className="w-full sm:w-[260px]">
                             <SelectValue placeholder="Campeonato" />
                         </SelectTrigger>
                         <SelectContent>

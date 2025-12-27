@@ -17,7 +17,9 @@ export async function GET(request: Request) {
         console.log("Starting background match update...");
 
         // 2. Fetch Championships to filter AUTO/HYBRID
-        const champsSnap = await adminDb.collection("championships").get();
+        // 2. Fetch Championships to filter AUTO/HYBRID (Only ACTIVE ones)
+        const champsRef = adminDb.collection("championships");
+        const champsSnap = await champsRef.where("status", "==", "ativo").get();
         const validChamps = new Set<string>();
 
         champsSnap.forEach(doc => {

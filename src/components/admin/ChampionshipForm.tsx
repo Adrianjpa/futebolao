@@ -22,6 +22,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ChampionBanner } from "@/components/banner/ChampionBanner";
 import { BannerConfigForm } from "@/components/banner/BannerConfigForm";
 import { BannerConfig, BannerWinner } from "@/types/banner";
+import { UserSearch } from "@/components/admin/UserSearch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 // ... (rest of imports/schemas/components until generic component start)
 const formSchema = z.object({
@@ -52,6 +54,7 @@ const formSchema = z.object({
         backgroundPosX: z.number().default(50),
         backgroundPosY: z.number().default(50),
         customFontSizeOffset: z.number().default(0),
+        selectionMode: z.enum(["auto", "manual"]).default("manual"),
     }).optional(),
     manualWinners: z.array(z.object({
         userId: z.string(),
@@ -80,112 +83,7 @@ interface ChampionshipFormProps {
     submitLabel?: string;
 }
 
-// User Search Component
-function UserSearch({ onSelect, disabled }: { onSelect: (user: any) => void; disabled?: boolean }) {
-    const [open, setOpen] = useState(false);
-    const [searchTerm, setSearchTerm] = useState("");
-    const [foundUsers, setFoundUsers] = useState<any[]>([]);
-    const [loading, setLoading] = useState(false);
 
-    // Initial fetch of active users
-    useEffect(() => {
-        if (!open) return;
-        const fetchInitial = async () => {
-            setLoading(true);
-            try {
-                const usersRef = collection(db, "users");
-                // Fetch first 20 users initially - assuming 'active' users are just all users for now
-                // In a real scenario, we might have an 'isActive' flag
-                const q = query(usersRef, limit(20));
-                const snap = await getDocs(q);
-                setFoundUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchInitial();
-    }, [open]);
-
-    // Search users in Firestore
-    const handleSearch = async (term: string) => {
-        setSearchTerm(term);
-        // If empty, reset to initial list logic (or just don't search if we want to keep previous)
-        // But for "search", we want to query
-        setLoading(true);
-        try {
-            const usersRef = collection(db, "users");
-            let q;
-
-            if (term.length < 1) {
-                q = query(usersRef, limit(20));
-            } else {
-                q = query(
-                    usersRef,
-                    where("displayName", ">=", term),
-                    where("displayName", "<=", term + '\uf8ff'),
-                    limit(20)
-                );
-            }
-
-            const snap = await getDocs(q);
-            setFoundUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={open}
-                    className="w-full justify-between"
-                    disabled={disabled}
-                >
-                    {disabled ? "Participantes consolidados (Bloqueado)" : "Pesquisar usuário..."}
-                    {!disabled && <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />}
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[300px] p-0">
-                <Command shouldFilter={false}>
-                    <CommandInput placeholder="Digite o nome..." value={searchTerm} onValueChange={handleSearch} />
-                    <CommandList>
-                        {loading && <CommandItem disabled>Carregando...</CommandItem>}
-                        {!loading && foundUsers.length === 0 && <CommandEmpty>Nenhum usuário encontrado.</CommandEmpty>}
-                        <CommandGroup>
-                            {foundUsers.map((user) => (
-                                <CommandItem
-                                    key={user.id}
-                                    onSelect={() => {
-                                        onSelect(user);
-                                        setOpen(false);
-                                    }}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <div className="h-6 w-6 rounded-full bg-slate-200 overflow-hidden flex items-center justify-center text-[10px]">
-                                            {user.photoUrl ? <img src={user.photoUrl} alt={user.displayName} className="h-full w-full object-cover" /> : (user.nickname?.[0] || user.displayName?.[0] || "?")}
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="font-medium text-sm">{user.nickname || user.nome || user.displayName}</span>
-                                            <span className="text-[10px] text-muted-foreground">{user.email}</span>
-                                        </div>
-                                    </div>
-                                    <Check className={cn("ml-auto h-4 w-4", "hidden")} />
-                                </CommandItem>
-                            ))}
-                        </CommandGroup>
-                    </CommandList>
-                </Command>
-            </PopoverContent>
-        </Popover>
-    );
-}
 
 export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, submitLabel = "Salvar" }: ChampionshipFormProps) {
     const form = useForm<ChampionshipFormData>({
@@ -213,6 +111,7 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
                 backgroundPosX: 50,
                 backgroundPosY: 50,
                 customFontSizeOffset: 0,
+                selectionMode: "manual",
             },
             manualWinners: initialData?.manualWinners || [],
             participants: initialData?.participants || [],
@@ -694,108 +593,137 @@ export function ChampionshipForm({ initialData, onSubmit, isSubmitting = false, 
                                         />
                                     </div>
 
-                                    {/* SECTION: MANUAL OVERRIDE (DEDO DE DEUS) */}
+                                    {/* MODE SELECTION TOGGLE */}
                                     <div className="border-t pt-4 space-y-4">
-                                        <div className="flex items-center justify-between">
-                                            <h3 className="font-bold text-lg">Vencedores (Seleção Manual)</h3>
-                                            <div className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                                                Sobejuga o cálculo automático
-                                            </div>
+                                        <div className="flex flex-col gap-2">
+                                            <Label className="text-base font-bold">Modo de Seleção dos Vencedores</Label>
+                                            <RadioGroup
+                                                value={form.watch("bannerConfig.selectionMode") || "manual"}
+                                                onValueChange={(val) => form.setValue("bannerConfig.selectionMode", val as any)}
+                                                className="flex gap-6"
+                                            >
+                                                <div className="flex items-center space-x-2 border p-3 rounded-lg hover:bg-muted cursor-pointer transition-colors w-full sm:w-auto">
+                                                    <RadioGroupItem value="auto" id="r-auto" />
+                                                    <Label htmlFor="r-auto" className="cursor-pointer">
+                                                        Automático
+                                                        <span className="block text-xs text-muted-foreground font-normal">Calculado pelas regras</span>
+                                                    </Label>
+                                                </div>
+                                                <div className="flex items-center space-x-2 border p-3 rounded-lg hover:bg-muted cursor-pointer transition-colors w-full sm:w-auto bg-yellow-500/5 border-yellow-500/20">
+                                                    <RadioGroupItem value="manual" id="r-manual" />
+                                                    <Label htmlFor="r-manual" className="cursor-pointer">
+                                                        Manual (Dedo de Deus)
+                                                        <span className="block text-xs text-muted-foreground font-normal">Você escolhe os nomes</span>
+                                                    </Label>
+                                                </div>
+                                            </RadioGroup>
                                         </div>
-
-                                        {/* General Champion Selector */}
-                                        <div className="grid gap-2 p-4 bg-muted/30 border border-border rounded-lg">
-                                            <Label className="text-base font-bold text-yellow-600 dark:text-yellow-500">🏆 Campeão Geral</Label>
-
-                                            {/* List of current champions */}
-                                            <div className="space-y-2">
-                                                {form.watch("manualWinners")?.filter(w => w.position === 'champion').map((winner) => (
-                                                    <div key={winner.userId} className="flex items-center justify-between gap-3 bg-card border border-border p-2 rounded shadow-sm">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="h-8 w-8 bg-muted rounded-full overflow-hidden">
-                                                                {winner.photoUrl && <img src={winner.photoUrl} className="h-full w-full object-cover" />}
-                                                            </div>
-                                                            <span className="font-medium text-foreground">{winner.displayName}</span>
-                                                        </div>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            type="button"
-                                                            onClick={() => removeManualWinner(winner.userId, 'champion')}
-                                                            className="text-muted-foreground hover:text-red-500 h-8 w-8 p-0"
-                                                        >
-                                                            <X className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-                                                ))}
-                                            </div>
-
-                                            <div className="mt-2">
-                                                <Select onValueChange={(userId) => {
-                                                    const p = participants.find(p => p.userId === userId);
-                                                    if (p) addManualWinner({ id: p.userId, nickname: p.displayName, photoUrl: p.photoUrl }, 'champion');
-                                                }}>
-                                                    <SelectTrigger className="bg-background">
-                                                        <SelectValue placeholder="Selecione o Campeão..." />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {participants.map(p => (
-                                                            <SelectItem key={p.userId} value={p.userId}>
-                                                                {p.displayName}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
-
-                                        {/* Gold Winner Selector */}
-                                        <div className="grid gap-2 p-4 bg-muted/30 border border-border rounded-lg">
-                                            <Label className="text-base font-bold text-yellow-600 dark:text-yellow-500">🌟 Palpiteiro de Ouro</Label>
-
-                                            {/* List of current gold winners */}
-                                            <div className="space-y-2">
-                                                {form.watch("manualWinners")?.filter(w => w.position === 'gold_winner').map((winner) => (
-                                                    <div key={winner.userId} className="flex items-center justify-between gap-3 bg-card border border-border p-2 rounded shadow-sm">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="h-8 w-8 bg-muted rounded-full overflow-hidden">
-                                                                {winner.photoUrl && <img src={winner.photoUrl} className="h-full w-full object-cover" />}
-                                                            </div>
-                                                            <span className="font-medium text-foreground">{winner.displayName}</span>
-                                                        </div>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            type="button"
-                                                            onClick={() => removeManualWinner(winner.userId, 'gold_winner')}
-                                                            className="text-muted-foreground hover:text-red-500 h-8 w-8 p-0"
-                                                        >
-                                                            <X className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-                                                ))}
-                                            </div>
-
-                                            <div className="mt-2">
-                                                <Select onValueChange={(userId) => {
-                                                    const p = participants.find(p => p.userId === userId);
-                                                    if (p) addManualWinner({ id: p.userId, nickname: p.displayName, photoUrl: p.photoUrl }, 'gold_winner');
-                                                }}>
-                                                    <SelectTrigger className="bg-background">
-                                                        <SelectValue placeholder="Selecione um participante..." />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {participants.map(p => (
-                                                            <SelectItem key={p.userId} value={p.userId}>
-                                                                {p.displayName}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
-
                                     </div>
+
+                                    {/* SECTION: MANUAL OVERRIDE (DEDO DE DEUS) */}
+                                    {(form.watch("bannerConfig.selectionMode") === 'manual' || !form.watch("bannerConfig.selectionMode")) && (
+                                        <div className="border-t pt-4 space-y-4 animate-in fade-in slide-in-from-top-2">
+                                            <div className="flex items-center justify-between">
+                                                <h3 className="font-bold text-lg">Vencedores (Seleção Manual)</h3>
+                                                <div className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                                                    Sobejuga o cálculo automático
+                                                </div>
+                                            </div>
+
+                                            {/* General Champion Selector */}
+                                            <div className="grid gap-2 p-4 bg-muted/30 border border-border rounded-lg">
+                                                <Label className="text-base font-bold text-yellow-600 dark:text-yellow-500">🏆 Campeão Geral</Label>
+
+                                                {/* List of current champions */}
+                                                <div className="space-y-2">
+                                                    {form.watch("manualWinners")?.filter(w => w.position === 'champion').map((winner) => (
+                                                        <div key={winner.userId} className="flex items-center justify-between gap-3 bg-card border border-border p-2 rounded shadow-sm">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="h-8 w-8 bg-muted rounded-full overflow-hidden">
+                                                                    {winner.photoUrl && <img src={winner.photoUrl} className="h-full w-full object-cover" />}
+                                                                </div>
+                                                                <span className="font-medium text-foreground">{winner.displayName}</span>
+                                                            </div>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                type="button"
+                                                                onClick={() => removeManualWinner(winner.userId, 'champion')}
+                                                                className="text-muted-foreground hover:text-red-500 h-8 w-8 p-0"
+                                                            >
+                                                                <X className="h-4 w-4" />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                <div className="mt-2">
+                                                    <Select onValueChange={(userId) => {
+                                                        const p = participants.find(p => p.userId === userId);
+                                                        if (p) addManualWinner({ id: p.userId, nickname: p.displayName, photoUrl: p.photoUrl }, 'champion');
+                                                    }}>
+                                                        <SelectTrigger className="bg-background">
+                                                            <SelectValue placeholder="Selecione o Campeão..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {participants.map(p => (
+                                                                <SelectItem key={p.userId} value={p.userId}>
+                                                                    {p.displayName}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            </div>
+
+                                            {/* Gold Winner Selector */}
+                                            <div className="grid gap-2 p-4 bg-muted/30 border border-border rounded-lg">
+                                                <Label className="text-base font-bold text-yellow-600 dark:text-yellow-500">🌟 Palpiteiro de Ouro</Label>
+
+                                                {/* List of current gold winners */}
+                                                <div className="space-y-2">
+                                                    {form.watch("manualWinners")?.filter(w => w.position === 'gold_winner').map((winner) => (
+                                                        <div key={winner.userId} className="flex items-center justify-between gap-3 bg-card border border-border p-2 rounded shadow-sm">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="h-8 w-8 bg-muted rounded-full overflow-hidden">
+                                                                    {winner.photoUrl && <img src={winner.photoUrl} className="h-full w-full object-cover" />}
+                                                                </div>
+                                                                <span className="font-medium text-foreground">{winner.displayName}</span>
+                                                            </div>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                type="button"
+                                                                onClick={() => removeManualWinner(winner.userId, 'gold_winner')}
+                                                                className="text-muted-foreground hover:text-red-500 h-8 w-8 p-0"
+                                                            >
+                                                                <X className="h-4 w-4" />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                <div className="mt-2">
+                                                    <Select onValueChange={(userId) => {
+                                                        const p = participants.find(p => p.userId === userId);
+                                                        if (p) addManualWinner({ id: p.userId, nickname: p.displayName, photoUrl: p.photoUrl }, 'gold_winner');
+                                                    }}>
+                                                        <SelectTrigger className="bg-background">
+                                                            <SelectValue placeholder="Selecione um participante..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {participants.map(p => (
+                                                                <SelectItem key={p.userId} value={p.userId}>
+                                                                    {p.displayName}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            </div>
+
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </CardContent>
